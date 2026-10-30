@@ -3,6 +3,9 @@
 // 막힌 잎은 닫거나 고쳐 쓰고(고쳐 쓰면 막힘 0부터), 무엇을 왜 바꿨는지 노드 이슈에 한 줄 남긴다.
 // 기존 인수 테스트를 고치면 목표를 바꾸는 것이라 머지하지 않고 사람에게 보낸다.
 // 사용자에게 보이는 동작이 바뀌면 노드 이슈에 알림 한 줄을 남기고 멈추지 않는다
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
 	firstLine,
 	giveUp,
@@ -109,7 +112,7 @@ const view = (n: number, o: Opts, run: Run) =>
 
 // 재계획 세션이 읽을 것: 노드 이슈, 자식 상태, 열린 자식의 티켓과 막힌 이유, 자식 PR의 결정과 재계획 칸.
 // 형제 PR을 몰아 읽는 건 이때뿐이다
-// ponytail: PR은 최근 200개만 본다. 넘으면 자식 번호로 검색한다
+// ponytail: PR은 최근 200개만 본다(0단계.md T6 남은 일)
 async function context(node: Tree, ticket: string, o: Opts, run: Run) {
 	const prs: { number: number; body: string }[] = JSON.parse(
 		await run("gh", [
@@ -212,9 +215,16 @@ export async function replan(
 					};
 				const r = await red(node.number, wt, run, true);
 				if (!r.ok) return { fail: "처음엔 빨강이 아니다", detail: r.report };
+				// 재계획 결과도 같이 머지한다. 약속 대조가 읽는다
+				mkdirSync(join(wt, dir), { recursive: true });
+				writeFileSync(
+					join(wt, dir, "replan.json"),
+					`${JSON.stringify(p, null, 2)}\n`,
+				);
 				return { report: r.report };
 			},
 			ticket,
+			plan: `${dir}/replan.json`,
 			title: `재계획: ${node.title}`,
 			body: `#${n}을 다시 짠다 (${dir}/)`,
 		});
@@ -268,7 +278,7 @@ export async function replan(
 				]);
 			}
 			const made = await create(node, p.leaves, o, run);
-			// ponytail: 여기까지 오다 죽으면 replan이 남아 다음 돌기에서 다시 짠다. 반쯤 만든 잎이 남는다
+			// ponytail: 여기까지 오다 죽으면 replan이 남아 다시 짜고 반쯤 만든 잎이 남는다(0단계.md T6 남은 일)
 			await relabel(node.number, [], ["replan"], o, run);
 			const what = [
 				list("닫음", p.close),

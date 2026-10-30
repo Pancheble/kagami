@@ -95,7 +95,7 @@ export function ready(tree: Tree, focus: number, dial: number): Tree[] {
 }
 
 // 재계획할 노드: replan이고 사람 대기가 아니며, 자신과 아래에 담당이 걸린 열린 이슈가 없다(돌고 있는 잎은 끝까지 둔다)
-// ponytail: 트리 순서로 고른다. 범위 다이얼은 보지 않는다. 일꾼이 여럿이고 replan 노드가 여럿이면 거리순으로
+// ponytail: 트리 순서로 고른다. 범위 다이얼은 보지 않는다(0단계.md T6 남은 일)
 export const replans = (tree: Tree) =>
 	all(tree).filter(
 		(t) =>

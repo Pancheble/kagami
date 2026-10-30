@@ -645,6 +645,7 @@ test("빨강 결과는 PR 댓글로, 약속 대조 평가자는 쓰기 도구 �
 	assert.ok(!/Write|Edit/.test(check ?? ""), check);
 	assert.match(evals[0], /덧셈 앱/);
 	assert.match(evals[0], /약속 대조/);
+	assert.match(evals[0], /contracts\/1\/leaves\.json/);
 });
 
 test("처음엔 빨강이 아니면 FAIL: 이유를 들고 같은 worktree에서 다시 쪼갠다", async () => {
@@ -843,7 +844,10 @@ const rp = (o: object = {}) => ({
 });
 
 test("재계획 신호에서 노드가 다시 쪼개진다: 막힌 잎을 닫고 새 잎을 만들고, 노드에 한 줄 남기고 replan을 뗀 뒤 새 잎을 고른다", async () => {
-	const { calls, splits, run, issues } = fake({ ...signalled, plans: [rp()] });
+	const { calls, splits, evals, run, issues } = fake({
+		...signalled,
+		plans: [rp()],
+	});
 	const o = splitOpts();
 	assert.deepEqual(await runLeaves(o, run), [
 		{ issue: 1, pr: 12, outcome: "merged" },
@@ -884,6 +888,11 @@ test("재계획 신호에서 노드가 다시 쪼개진다: 막힌 잎을 닫고
 		"재계획 (resplit): #7의 끝 기준은 못 푸니 닫고 add와 앱 연결로 다시 쪼갠다 — 닫음 #7 · 새 잎 #9, #10",
 	);
 	assert.equal(splits.length, 1);
+	// 재계획 결과는 contracts/1/replan.json으로 같이 머지되고, 약속 대조는 그 파일을 본다
+	const saved = `${o.dir}-wt/replan/1-1/contracts/1/replan.json`;
+	assert.deepEqual(JSON.parse(readFileSync(saved, "utf8")), rp());
+	assert.match(evals[0], /contracts\/1\/replan\.json/);
+	assert.ok(!evals[0].includes("leaves.json"));
 	// 노드 claim은 놓았다
 	assert.deepEqual(claims(issues[1]), []);
 });

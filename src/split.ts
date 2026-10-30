@@ -249,6 +249,7 @@ export async function land<P>(
 		args: (fix: string) => string[]; // claude 인자. fix는 지난 FAIL 이유
 		check: (p: P, wt: string) => Promise<Check>;
 		ticket: string; // 약속 대조가 받는 노드 이슈
+		plan: string; // 약속 대조가 읽을 계획 파일. check가 통과하면서 worktree에 쓴다
 		title: string;
 		body: string;
 	},
@@ -330,7 +331,7 @@ export async function land<P>(
 				wt,
 			);
 			const report = await evaluate(
-				prompt("promise-check", { ticket: s.ticket, node: n }),
+				prompt("promise-check", { ticket: s.ticket, node: n, plan: s.plan }),
 				wt,
 				o,
 				run,
@@ -422,6 +423,7 @@ export async function split(
 					return { report: r.report };
 				},
 				ticket,
+				plan: `${dir}/leaves.json`,
 				title: `쪼개기: ${node.title}`,
 				body: `#${n}을 잎 티켓과 계약·인수 테스트(${dir}/)로 쪼갠다`,
 			});
