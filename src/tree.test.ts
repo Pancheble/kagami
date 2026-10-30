@@ -9,6 +9,7 @@ const issues: Record<number, object> = {
 	1: {
 		number: 1,
 		title: "뿌리",
+		body: "",
 		state: "OPEN",
 		labels: { nodes: [{ name: "node" }] },
 		assignees: { nodes: [] },
@@ -18,6 +19,7 @@ const issues: Record<number, object> = {
 	2: {
 		number: 2,
 		title: "가지",
+		body: "",
 		state: "OPEN",
 		labels: { nodes: [{ name: "node" }, { name: "replan" }] },
 		assignees: { nodes: [] },
@@ -27,6 +29,7 @@ const issues: Record<number, object> = {
 	3: {
 		number: 3,
 		title: "잎 A",
+		body: "## 목표\n\n무엇\n\n## 범위\n\n<!-- 주석 -->\n- `src/a.ts`\n- src/b/\n\n## 기다릴 티켓\n\n- #4\n",
 		state: "OPEN",
 		labels: { nodes: [{ name: "leaf" }, { name: "stuck-2" }] },
 		assignees: { nodes: [{ login: "bot" }] },
@@ -41,6 +44,7 @@ const issues: Record<number, object> = {
 	4: {
 		number: 4,
 		title: "잎 B",
+		body: "",
 		state: "CLOSED",
 		labels: { nodes: [{ name: "leaf" }] },
 		assignees: { nodes: [] },
@@ -71,6 +75,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 		blockedBy: [],
 		replan: false,
 		stuck: 0,
+		scope: [],
 		children: [
 			{
 				number: 2,
@@ -81,6 +86,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				blockedBy: [],
 				replan: true,
 				stuck: 0,
+				scope: [],
 				children: [
 					{
 						number: 4,
@@ -91,6 +97,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 						blockedBy: [],
 						replan: false,
 						stuck: 0,
+						scope: [],
 						children: [],
 					},
 				],
@@ -107,6 +114,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				],
 				replan: false,
 				stuck: 2,
+				scope: ["src/a.ts", "src/b/"],
 				children: [],
 			},
 		],

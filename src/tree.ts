@@ -14,6 +14,7 @@ export type Tree = {
 	blockedBy: { number: number; state: State }[];
 	replan: boolean; // 재계획 중: 아래 잎을 고르지 않는다
 	stuck: number; // 막힘 횟수
+	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
 	children: Tree[];
 };
 
@@ -47,7 +48,7 @@ export async function ensureLabels(repo: string, run: Run) {
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
-      number title state
+      number title body state
       labels(first: 100) { nodes { name } }
       assignees(first: 100) { nodes { login } }
       subIssues(first: 100) { nodes { number } }
@@ -59,6 +60,7 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
 type Raw = {
 	number: number;
 	title: string;
+	body: string;
 	state: string;
 	labels: { nodes: { name: string }[] };
 	assignees: { nodes: { login: string }[] };
@@ -67,6 +69,12 @@ type Raw = {
 };
 
 const lower = (s: string) => s.toLowerCase() as State;
+
+// "## 범위" 칸에서 "- 경로" 줄만 읽는다. 백틱은 벗긴다
+export function scope(body: string): string[] {
+	const sec = body.split(/^## /m).find((s) => s.startsWith("범위"));
+	return sec ? [...sec.matchAll(/^- `?([^`\s]+)`?/gm)].map((m) => m[1]) : [];
+}
 
 export async function readTree(
 	repo: string,
@@ -104,6 +112,7 @@ export async function readTree(
 			0,
 			...labels.map((l) => Number(l.match(/^stuck-(\d+)$/)?.[1] ?? 0)),
 		),
+		scope: scope(i.body),
 		children: await Promise.all(
 			i.subIssues.nodes.map((c) => readTree(repo, c.number, run)),
 		),
