@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { type Run, runLeaves, verdict } from "./leaf.ts";
+import { lockClone, type Run, runLeaves, verdict } from "./leaf.ts";
 
 type Comment = { id: number; body: string; created_at: string };
 type Issue = {
@@ -11,6 +21,7 @@ type Issue = {
 	subIssues: number[];
 	comments: Comment[];
 	state: "OPEN" | "CLOSED";
+	blockedBy?: number[];
 };
 
 const now = () => new Date().toISOString();
@@ -26,6 +37,10 @@ function fake(
 		ff?: boolean[];
 		implThrows?: boolean;
 		two?: boolean; // 범위가 다른 잎 #8도 둔다
+		root?: Partial<Issue>;
+		plans?: object[]; // 쪼개기 세션의 구조화 출력
+		reds?: object[][]; // node --test 한 번마다 테스트 결과 줄
+		merged?: object; // dev에 이미 있는 contracts/1/leaves.json
 	} = {},
 ) {
 	const issues: Record<number, Issue> = {
@@ -37,6 +52,7 @@ function fake(
 			subIssues: [7],
 			comments: [],
 			state: "OPEN",
+			...structuredClone(o.root ?? {}),
 		},
 		7: {
 			title: "더미 잎",
@@ -63,6 +79,10 @@ function fake(
 	const ci = [...(o.ci ?? [])];
 	const rebase = [...(o.rebase ?? [])];
 	const ff = [...(o.ff ?? [])];
+	const plans = [...(o.plans ?? [])];
+	const reds = [...(o.reds ?? [])];
+	const splits: string[] = []; // 쪼개기 세션 프롬프트
+	const evals: string[] = []; // 평가자 프롬프트
 	const calls: string[] = [];
 	const prompts: string[] = [];
 	let id = 1000;
@@ -91,7 +111,12 @@ function fake(
 							labels: { nodes: i.labels.map((name) => ({ name })) },
 							assignees: { nodes: i.assignees.map((login) => ({ login })) },
 							subIssues: { nodes: i.subIssues.map((number) => ({ number })) },
-							blockedBy: { nodes: [] },
+							blockedBy: {
+								nodes: (i.blockedBy ?? []).map((b) => ({
+									number: b,
+									state: issues[b].state,
+								})),
+							},
 							comments: {
 								nodes: i.comments.map((c) => ({
 									databaseId: c.id,
@@ -103,6 +128,32 @@ function fake(
 					},
 				},
 			});
+		}
+		if (line.startsWith("gh api repos/o/r/issues -X POST")) {
+			const n = Math.max(...Object.keys(issues).map(Number)) + 1;
+			issues[n] = {
+				title: at("-f").slice(6),
+				body: args[args.indexOf("-f", args.indexOf("-f") + 1) + 1].slice(5),
+				labels: ["leaf"],
+				assignees: [],
+				subIssues: [],
+				comments: [],
+				state: "OPEN",
+			};
+			return JSON.stringify({ id: n * 10, number: n });
+		}
+		const sub = line.match(/repos\/o\/r\/issues\/(\d+)\/sub_issues -X POST/);
+		if (sub) {
+			issues[Number(sub[1])].subIssues.push(Number(at("-F").slice(13)) / 10);
+			return "";
+		}
+		const dep = line.match(
+			/repos\/o\/r\/issues\/(\d+)\/dependencies\/blocked_by/,
+		);
+		if (dep) {
+			const i = issues[Number(dep[1])];
+			i.blockedBy = [...(i.blockedBy ?? []), Number(at("-F").slice(9)) / 10];
+			return "";
 		}
 		const del = line.match(/-X DELETE repos\/o\/r\/issues\/comments\/(\d+)/);
 		if (del) {
@@ -130,6 +181,7 @@ function fake(
 					i.labels = i.labels.filter((l) => l !== v);
 				if (args[k] === "--add-assignee") i.assignees.push("pancheble");
 				if (args[k] === "--remove-assignee") i.assignees = [];
+				if (args[k] === "--body") i.body = v;
 			}
 			return "";
 		}
@@ -147,8 +199,31 @@ function fake(
 		}
 		if (line.startsWith("gh pr create"))
 			return "https://github.com/o/r/pull/12\n";
-		if (cmd === "claude" && args.includes("--append-system-prompt-file"))
+		if (cmd === "claude" && args.includes("--append-system-prompt-file")) {
+			evals.push(args[1]);
 			return verdicts.shift() ?? "판정: PASS";
+		}
+		if (cmd === "claude" && args.includes("--json-schema")) {
+			splits.push(args[1]);
+			return JSON.stringify({ structured_output: plans.shift() ?? plan() });
+		}
+		if (line.startsWith("git show origin/dev:contracts/1/leaves.json")) {
+			if (!o.merged) throw new Error("git show 실패\nfatal: path not in");
+			return JSON.stringify(o.merged);
+		}
+		if (line.startsWith("git ls-files"))
+			return "contracts/1/add.contract.js\ncontracts/1/app.accept.js\n";
+		if (args[0] === "--test") {
+			const dest = args
+				.find((a) => a.startsWith("--test-reporter-destination="))
+				?.slice(28);
+			const rows = reds.shift() ?? [
+				{ name: "t", ok: false, error: "Error: not implemented" },
+			];
+			if (dest)
+				writeFileSync(dest, rows.map((r) => `${JSON.stringify(r)}\n`).join(""));
+			throw new Error("node --test 실패"); // 빨강이면 종료 코드가 0이 아니다
+		}
 		if (cmd === "claude") {
 			prompts.push(args[1]);
 			if (o.implThrows) throw new Error("claude -p 실패\n세션이 죽었다");
@@ -161,8 +236,32 @@ function fake(
 			throw new Error("git push 실패\n! [rejected] (fetch first)");
 		return "";
 	};
-	return { calls, prompts, run, issues, git };
+	return { calls, prompts, splits, evals, run, issues, git };
 }
+
+// 쪼개기 세션의 기본 답: 잎 둘, 둘째는 첫째를 기다린다
+const plan = (o: object = {}) => ({
+	asIs: false,
+	leaves: [
+		{
+			title: "add 구현",
+			goal: "add가 합을 돌려준다",
+			promises: "add(a, b): number",
+			test: "node --test contracts/1/add.contract.js",
+			scope: ["src/add.js"],
+			waitFor: [],
+		},
+		{
+			title: "앱 연결",
+			goal: "앱이 add를 쓴다",
+			promises: "add(a, b): number",
+			test: "node --test contracts/1/app.accept.js",
+			scope: ["src/app.js"],
+			waitFor: [0],
+		},
+	],
+	...o,
+});
 
 const opts = {
 	repo: "o/r",
@@ -429,4 +528,194 @@ test("고를 잎이 없으면 트리만 읽는다", async () => {
 		calls.map((c) => c.split(" ").slice(0, 3).join(" ")),
 		["gh api graphql", "gh api graphql"],
 	);
+});
+
+// ── 쪼개기 (T5) ──
+// 뿌리 #1에 자식이 없으면 준비된 잎이 0 < 일꾼 1이라 쪼개기 신호가 뜬다
+const bare = {
+	subIssues: [],
+	body: "## 목표\n\n덧셈 앱\n\n## 자식끼리의 약속\n\n- add(a, b)",
+};
+const splitOpts = () => ({
+	...opts,
+	dir: mkdtempSync(join(tmpdir(), "clone-")),
+});
+
+test("준비된 잎이 일꾼 수보다 적으면 가장 가까운 안 쪼갠 노드를 쪼개고, 그다음 새 잎을 고른다", async () => {
+	const { calls, splits, run, issues } = fake({ root: bare });
+	const o = splitOpts();
+	const results = await runLeaves(o, run);
+	assert.deepEqual(results, [
+		{ issue: 1, pr: 12, outcome: "merged" },
+		{ issue: 9, pr: 12, outcome: "merged" },
+	]);
+	inOrder(calls, [
+		"gh api repos/o/r/issues/1/comments -X POST -f body=claim: pancheble/worker-1",
+		"git show origin/dev:contracts/1/leaves.json", // 이어 할 쪼개기가 없다
+		"gh issue view 1",
+		"git worktree add -b split/1-1",
+		"claude -p", // 쪼개기 세션
+		"git ls-files",
+		"git add -A",
+		"git commit",
+		"git push --force-with-lease -u origin split/1-1",
+		"gh pr create",
+		"gh pr comment 12 -R o/r --body 처음엔 빨강",
+		"claude -p", // 약속 대조
+		"gh pr comment 12 -R o/r --body 판정: PASS",
+		"git rebase origin/dev",
+		"gh pr checks 12",
+		"git push origin HEAD:dev",
+		"gh api repos/o/r/issues -X POST -f title=add 구현",
+		"gh api repos/o/r/issues/1/sub_issues -X POST -F sub_issue_id=90",
+		"gh api repos/o/r/issues -X POST -f title=앱 연결",
+		"gh api repos/o/r/issues/1/sub_issues -X POST -F sub_issue_id=100",
+		"gh api repos/o/r/issues/10/dependencies/blocked_by -X POST -F issue_id=90",
+		"gh issue comment 1 -R o/r --body 쪼갬: #9, #10",
+		"gh api -X DELETE repos/o/r/issues/comments/", // 노드 claim 놓기
+		"gh api graphql",
+		"git worktree add -b leaf/9-1", // #10은 #9를 기다린다
+	]);
+	// 테스트 파일마다 따로 돌린다
+	assert.equal(count(calls, `${process.execPath} --test`), 2);
+	// 쪼개기 세션: 부모 이슈만 읽고, gh 없이, 구조화 출력으로 잎을 돌려준다
+	const session = calls.find((c) => c.includes("--json-schema")) ?? "";
+	assert.match(session, /--permission-mode acceptEdits/);
+	assert.ok(!session.includes("Bash(gh"), session);
+	assert.match(splits[0], /덧셈 앱/);
+	assert.match(splits[0], /contracts\/1\//);
+	assert.ok(!splits[0].includes("더미 잎"), "다른 이슈를 넘기지 않는다");
+	// 잎 티켓
+	assert.deepEqual(issues[1].subIssues, [9, 10]);
+	assert.deepEqual(issues[10].blockedBy, [9]);
+	assert.ok(issues[9].labels.includes("leaf"));
+	assert.match(
+		issues[9].body,
+		/## 끝 기준 테스트\n\nnode --test contracts\/1\/add.contract.js/,
+	);
+	assert.match(issues[9].body, /## 범위\n\n- src\/add.js/);
+	assert.deepEqual(claims(issues[1]), []);
+	// 쪼개기 결과는 contracts/1/leaves.json으로 같이 머지된다
+	const saved = `${o.dir}-wt/split/1-1/contracts/1/leaves.json`;
+	assert.deepEqual(JSON.parse(readFileSync(saved, "utf8")), plan());
+});
+
+test("빨강 결과는 PR 댓글로, 약속 대조 평가자는 쓰기 도구 없이 노드 이슈를 받는다", async () => {
+	const { calls, evals, run } = fake({ root: bare });
+	await runLeaves(splitOpts(), run);
+	const check = calls.find(
+		(c) => c.includes("--append-system-prompt-file") && c.includes("약속"),
+	);
+	assert.ok(check?.includes("--tools Read,Grep,Glob,Bash"), check);
+	assert.ok(!/Write|Edit/.test(check ?? ""), check);
+	assert.match(evals[0], /덧셈 앱/);
+	assert.match(evals[0], /약속 대조/);
+});
+
+test("처음엔 빨강이 아니면 FAIL: 이유를 들고 같은 worktree에서 다시 쪼갠다", async () => {
+	const green = [{ name: "늘 통과", ok: true, error: "" }];
+	const { calls, splits, run } = fake({ root: bare, reds: [green] });
+	const [r] = await runLeaves(splitOpts(), run);
+	assert.deepEqual(r, { issue: 1, pr: 12, outcome: "merged" });
+	assert.equal(splits.length, 2);
+	assert.match(splits[1], /늘 통과/);
+	assert.equal(count(calls, "git worktree add"), 2); // 쪼개기 1 + 잎 1
+	assert.equal(count(calls, "gh pr create"), 2);
+});
+
+test("잎 조건을 못 맞추면(범위 없음, 끝 기준이 contracts/<노드>/를 안 가리킴) FAIL로 다시 쪼갠다", async () => {
+	const bad = plan();
+	bad.leaves[0] = { ...bad.leaves[0], scope: [], test: "npm test" };
+	const { calls, splits, run } = fake({ root: bare, plans: [bad] });
+	await runLeaves(splitOpts(), run);
+	assert.equal(splits.length, 2);
+	assert.match(splits[1], /"add 구현": 범위가 비었다/);
+	assert.match(splits[1], /"add 구현": 끝 기준 테스트가 contracts\/1\//);
+	assert.equal(count(calls, "gh api repos/o/r/issues -X POST"), 2);
+});
+
+test("약속 대조가 NEEDS_WORK면 보고서를 들고 다시 쪼갠다", async () => {
+	const { splits, run } = fake({
+		root: bare,
+		verdicts: ["판정: NEEDS_WORK\n약속 add(a, b) → 없음"],
+	});
+	await runLeaves(splitOpts(), run);
+	assert.equal(splits.length, 2);
+	assert.match(splits[1], /add\(a, b\) → 없음/);
+});
+
+test("쪼개기도 FAIL 3번이면 같은 길로 노드가 막힌다. 잎 이슈는 만들지 않는다", async () => {
+	const { calls, run, issues } = fake({
+		root: bare,
+		verdicts: Array(3).fill("판정: NEEDS_WORK"),
+	});
+	assert.deepEqual(await runLeaves(splitOpts(), run), [
+		{ issue: 1, pr: 12, outcome: "stuck" },
+	]);
+	assert.ok(calls.some((c) => c.startsWith("gh pr close split/1-1")));
+	assert.ok(issues[1].labels.includes("stuck-1"));
+	assert.match(issues[1].comments.at(-1)?.body ?? "", /^막힘 1\/3: /);
+	assert.equal(count(calls, "gh api repos/o/r/issues -X POST"), 0);
+	assert.deepEqual(claims(issues[1]), []);
+});
+
+test("노드가 이미 잎 조건을 만족하면 그대로 잎: 노드를 잎으로 바꾸고 고른다", async () => {
+	const one = plan({ asIs: true });
+	one.leaves = [one.leaves[0]];
+	const { calls, run, issues } = fake({ root: bare, plans: [one] });
+	assert.deepEqual(await runLeaves(splitOpts(), run), [
+		{ issue: 1, pr: 12, outcome: "merged" },
+		{ issue: 1, pr: 12, outcome: "merged" },
+	]);
+	assert.ok(
+		calls.some((c) =>
+			c.startsWith(
+				"gh issue edit 1 -R o/r --remove-label node --add-label leaf",
+			),
+		),
+	);
+	assert.equal(count(calls, "gh api repos/o/r/issues -X POST"), 0);
+	assert.match(issues[1].body, /^## 목표\n\n덧셈 앱/); // 원래 본문은 남긴다
+	assert.match(issues[1].body, /## 범위\n\n- src\/add.js/);
+	assert.ok(calls.some((c) => c.startsWith("git worktree add -b leaf/1-1")));
+});
+
+test("dev에 contracts/<노드>/leaves.json이 있는데 자식이 없으면 다시 쪼개지 않고 이슈 만들기만 잇는다", async () => {
+	const { calls, splits, run, issues } = fake({ root: bare, merged: plan() });
+	const [r] = await runLeaves(splitOpts(), run);
+	assert.deepEqual(r, { issue: 1, pr: 0, outcome: "merged" });
+	assert.equal(splits.length, 0);
+	assert.ok(!calls.some((c) => c.startsWith("git worktree add -b split/")));
+	assert.deepEqual(issues[1].subIssues, [9, 10]);
+});
+
+test("준비된 잎이 일꾼 수만큼 있으면 쪼개지 않는다", async () => {
+	const { calls, run } = fake();
+	await runLeaves(opts, run);
+	assert.ok(!calls.some((c) => c.includes("leaves.json")));
+});
+
+// ── 클론 잠금 ──
+const clone = () => {
+	const dir = mkdtempSync(join(tmpdir(), "clone-"));
+	mkdirSync(join(dir, ".git"));
+	return dir;
+};
+test("클론 하나에 프로세스 하나: 살아 있는 프로세스가 쓰는 클론이면 시작을 거부한다", () => {
+	const dir = clone();
+	const unlock = lockClone(dir);
+	assert.throws(() => lockClone(dir), /이미 쓰는 클론/);
+	unlock();
+	lockClone(dir)();
+});
+
+test("잠근 프로세스가 죽었으면 묵은 잠금을 넘겨받는다", () => {
+	const dir = clone();
+	const lock = join(dir, ".git", "kagami.lock");
+	const dead = spawnSync(process.execPath, ["-e", ""]).pid;
+	writeFileSync(lock, String(dead));
+	const unlock = lockClone(dir);
+	assert.equal(readFileSync(lock, "utf8"), String(process.pid));
+	unlock();
+	assert.equal(existsSync(lock), false);
 });

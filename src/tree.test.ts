@@ -146,6 +146,43 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 	assert.ok(calls[0].includes("owner=o") && calls[0].includes("name=r"));
 });
 
+test("댓글은 100개를 넘어도 끝까지 페이지를 넘겨 읽는다", async () => {
+	const page = (ids: number[], next?: string) => ({
+		pageInfo: { hasNextPage: !!next, endCursor: next ?? null },
+		nodes: ids.map((id) => ({
+			databaseId: id,
+			body: `댓글 ${id}`,
+			createdAt: "2026-10-30T00:00:00Z",
+		})),
+	});
+	const calls: string[] = [];
+	const run: Run = async (_cmd, args) => {
+		calls.push(args.join(" "));
+		const after = args.find((a) => a.startsWith("after="))?.slice(6);
+		if (after === "c1")
+			return JSON.stringify({
+				data: { repository: { issue: { comments: page([2], "c2") } } },
+			});
+		if (after === "c2")
+			return JSON.stringify({
+				data: { repository: { issue: { comments: page([3]) } } },
+			});
+		return JSON.stringify({
+			data: {
+				repository: {
+					issue: { ...issues[4], comments: page([1], "c1") },
+				},
+			},
+		});
+	};
+	const tree = await readTree("o/r", 4, run);
+	assert.deepEqual(
+		tree.comments.map((c) => c.id),
+		[1, 2, 3],
+	);
+	assert.equal(calls.length, 3);
+});
+
 test("없는 이슈면 번호를 말하며 실패한다", async () => {
 	const run: Run = async () =>
 		JSON.stringify({ data: { repository: { issue: null } } });

@@ -2,7 +2,10 @@
 // 잎은 pick.ts로 고르고, 머지 실패(rebase 충돌·CI·fast-forward 거절)도 FAIL로 센다.
 // 실행: node src/leaf.ts --repo owner/name --dir <로컬 클론> --root <뿌리>
 //       [--focus <집중 노드>] [--dial <층 수>] [--workers 1] [--ttl <시간>] [--claude <claude 경로>]
+// 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
 import { execFile } from "node:child_process";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
@@ -15,7 +18,9 @@ import {
 	path,
 	ready,
 	release,
+	unsplit,
 } from "./pick.ts";
+import { split } from "./split.ts";
 import { readTree, type Tree } from "./tree.ts";
 
 export type Run = (
@@ -23,7 +28,7 @@ export type Run = (
 	args: string[],
 	cwd?: string,
 ) => Promise<string>;
-type Opts = {
+export type Opts = {
 	repo: string;
 	dir: string;
 	claude: string;
@@ -43,8 +48,32 @@ export type Result = {
 const EVALUATOR = fileURLToPath(
 	new URL("../.claude/agents/evaluator.md", import.meta.url),
 );
-const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
+export const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
 const STUCKS = 3; // 막힘이 이만큼이면 부모에 재계획 신호
+
+// 프롬프트는 하네스 저장소의 prompts/<이름>.md. {{키}}를 채운다. 권한은 여기 말고 CLI 플래그로 건다
+export const prompt = (name: string, vars: Record<string, string>) =>
+	readFileSync(new URL(`../prompts/${name}.md`, import.meta.url), "utf8")
+		.trimEnd()
+		.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
+
+// 평가자: 매 라운드 새 세션, 쓰기 도구 없음. 구현자의 출력은 넘기지 않는다
+export const evaluate = (text: string, wt: string, o: Opts, run: Run) =>
+	run(
+		o.claude,
+		[
+			"-p",
+			text,
+			"--append-system-prompt-file",
+			EVALUATOR,
+			"--tools",
+			"Read,Grep,Glob,Bash",
+			// ponytail: 끝 기준을 돌릴 명령만 미리 허용한다. 티켓마다 명령이 다르면 잎 티켓에 적게 한다
+			"--allowedTools",
+			"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
+		],
+		wt,
+	);
 
 export function verdict(report: string): "PASS" | "NEEDS_WORK" {
 	return report.match(/판정:\s*(PASS|NEEDS_WORK)/)?.[1] === "PASS"
@@ -68,16 +97,18 @@ async function waitChecks(pr: number, o: Opts, run: Run, cwd: string) {
 	}
 }
 
-const quiet = (p: Promise<unknown>) => p.catch(() => {});
-const firstLine = (s: string) => s.split("\n")[0];
+export const quiet = (p: Promise<unknown>) => p.catch(() => {});
+export const firstLine = (s: string) => s.split("\n")[0];
 const stuckNotes = (t: Tree) =>
 	t.comments.map((c) => c.body).filter((b) => /^막힘 \d+\/\d+: /.test(b));
-const branchOf = (t: Tree) => `leaf/${t.number}-${t.stuck + 1}`; // 시도마다 새 브랜치
-const worktreeOf = (t: Tree, o: Opts) => `${o.dir}-wt/${branchOf(t)}`;
+// 시도마다 새 브랜치. 노드는 쪼개기 브랜치
+export const branchOf = (t: Tree) =>
+	`${t.kind === "node" ? "split" : "leaf"}/${t.number}-${t.stuck + 1}`;
+export const worktreeOf = (t: Tree, o: Opts) => `${o.dir}-wt/${branchOf(t)}`;
 
 // 막힘과 끊긴 시도(claim 만료)가 같이 지나는 길: 이번 시도의 흔적을 치우고
 // claim 놓기 + 막힘 +1 + 막힘 이유 댓글. 막힘이 STUCKS에 닿으면 부모에 replan 라벨과 재계획 신호
-async function giveUp(
+export async function giveUp(
 	tree: Tree,
 	leaf: Tree,
 	claims: Claim[],
@@ -147,7 +178,7 @@ async function giveUp(
 
 // 순차 머지: 잠금 대신 dev의 fast-forward가 잠금이다. 그 사이 dev가 움직이면 push가 거절된다.
 // 실패면 FAIL 이유를 돌려준다. fix가 있으면 구현자가 고칠 것이 있다는 뜻
-async function merge(
+export async function merge(
 	pr: number,
 	wt: string,
 	o: Opts,
@@ -220,7 +251,7 @@ async function attempt(
 					o.claude,
 					[
 						"-p",
-						`너는 구현자다. 아래 잎 티켓을 구현해. 테스트부터 쓰고, 티켓 범위 밖 파일은 건드리지 마. 커밋은 하지 마.\n\n${ticket}${before}${fix && `\n\n${fix}`}`,
+						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
 						"--permission-mode",
 						"acceptEdits",
 						"--allowedTools",
@@ -260,21 +291,11 @@ async function attempt(
 					);
 					pr = Number(url.trim().split("/").pop());
 				}
-				// 평가자: 매 라운드 새 세션, 쓰기 도구 없음. 구현자의 출력은 넘기지 않는다
-				const report = await run(
-					o.claude,
-					[
-						"-p",
-						`${ticket}\n\n여기서 dev는 origin/dev다(git diff origin/dev...HEAD). 보고서 맨 위에 "판정: PASS" 또는 "판정: NEEDS_WORK"를 적어.`,
-						"--append-system-prompt-file",
-						EVALUATOR,
-						"--tools",
-						"Read,Grep,Glob,Bash",
-						// ponytail: 끝 기준을 돌릴 명령만 미리 허용한다. 티켓마다 명령이 다르면 잎 티켓에 적게 한다
-						"--allowedTools",
-						"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
-					],
+				const report = await evaluate(
+					prompt("evaluate", { ticket }),
 					wt,
+					o,
+					run,
 				);
 				await run(
 					"gh",
@@ -309,12 +330,12 @@ async function attempt(
 	return { issue: i.number, pr, outcome: "stuck" };
 }
 
-// 만료된 claim이 걸린 열린 잎을 막힘으로 돌린다. 하나라도 돌렸으면 true
+// 만료된 claim이 걸린 열린 잎·노드(쪼개기)를 막힘으로 돌린다. 하나라도 돌렸으면 true
 async function expire(tree: Tree, o: Opts, run: Run): Promise<boolean> {
 	const cutoff = Date.now() - o.ttl * 3_600_000;
 	let any = false;
 	for (const t of all(tree)) {
-		if (t.kind !== "leaf" || t.state !== "open") continue;
+		if (t.state !== "open") continue;
 		const old = t.comments.filter(
 			(c) => isClaim(c.body) && Date.parse(c.createdAt) < cutoff,
 		);
@@ -350,17 +371,61 @@ function oneGit(run: Run): Run {
 	};
 }
 
-// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
+// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → (쪼개기 신호) → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
 // ponytail: 한 번 고르고 끝난다. 다음 잎으로 계속 도는 루프는 정지 파일과 함께 T10
 export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 	const run = oneGit(raw);
 	let tree = await readTree(o.repo, o.root, run);
 	if (await expire(tree, o, run)) tree = await readTree(o.repo, o.root, run);
-	const got = await claim(o.repo, ready(tree, o.focus, o.dial), run, {
+	let leaves = ready(tree, o.focus, o.dial);
+	const done: Result[] = [];
+	// 쪼개기 신호: 준비된 잎이 일꾼 수보다 적으면 가장 가까운 안 쪼갠 노드를 쪼개고 다시 고른다
+	// ponytail: 한 번에 노드 하나. 모자란 만큼 여러 노드를 쪼개는 건 일꾼이 여럿일 때
+	if (leaves.length < o.workers) {
+		const [c] = await claim(o.repo, unsplit(tree, o.focus, o.dial), run, {
+			account: o.account,
+		});
+		if (c) {
+			done.push(await split(tree, c, o, run));
+			tree = await readTree(o.repo, o.root, run);
+			leaves = ready(tree, o.focus, o.dial);
+		}
+	}
+	const got = await claim(o.repo, leaves, run, {
 		account: o.account,
 		workers: o.workers,
 	});
-	return Promise.all(got.map((c) => attempt(tree, c, o, run)));
+	return [
+		...done,
+		...(await Promise.all(got.map((c) => attempt(tree, c, o, run)))),
+	];
+}
+
+// 클론 하나에 프로세스 하나: oneGit은 한 프로세스 안에서만 줄을 세운다.
+// 잠금 파일에 pid를 적고, 그 pid가 살아 있으면 시작을 거부한다. 돌려준 함수로 푼다
+// ponytail: 묵은 잠금을 두 프로세스가 동시에 넘겨받는 틈은 막지 않는다
+export function lockClone(dir: string): () => void {
+	const lock = join(dir, ".git", "kagami.lock");
+	try {
+		writeFileSync(lock, String(process.pid), { flag: "wx" });
+	} catch (e) {
+		if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+		const pid = Number(readFileSync(lock, "utf8"));
+		if (alive(pid))
+			throw new Error(`이미 쓰는 클론이다: ${dir} (pid ${pid}, ${lock})`);
+		writeFileSync(lock, String(process.pid));
+	}
+	return () => rmSync(lock, { force: true });
+}
+
+function alive(pid: number): boolean {
+	if (!(pid > 0)) return false;
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (e) {
+		return (e as NodeJS.ErrnoException).code === "EPERM";
+	}
 }
 
 const exec = promisify(execFile);
@@ -404,6 +469,7 @@ if (import.meta.main) {
 		dial: values.dial === undefined ? Infinity : num("--dial", values.dial, 0),
 		ttl: num("--ttl", values.ttl, 1),
 	};
+	process.on("exit", lockClone(o.dir));
 	const account = (await sh("gh", ["api", "user", "--jq", ".login"]))
 		.trim()
 		.toLowerCase();
