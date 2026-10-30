@@ -20,7 +20,7 @@ export function overlaps(a: string[], b: string[]): boolean {
 }
 
 // 뿌리에서 집중 노드까지
-function path(t: Tree, focus: number): Tree[] | undefined {
+export function path(t: Tree, focus: number): Tree[] | undefined {
 	if (t.number === focus) return [t];
 	for (const c of t.children) {
 		const p = path(c, focus);
@@ -28,7 +28,20 @@ function path(t: Tree, focus: number): Tree[] | undefined {
 	}
 }
 
-const all = (t: Tree): Tree[] => [t, ...t.children.flatMap(all)];
+export const all = (t: Tree): Tree[] => [t, ...t.children.flatMap(all)];
+
+export const isClaim = (body: string) => /^claim: \S+\s*$/.test(body);
+
+// assignee는 claim을 이긴 뒤에야 걸린다. 그 틈에도 담당으로 보려고 claim 댓글도 본다
+const taken = (t: Tree) =>
+	t.assignees.length > 0 || t.comments.some((c) => isClaim(c.body));
+
+// CLI 숫자 인자. 0 이상 정수만
+export function num(flag: string, v: string, min: number): number {
+	if (!/^\d+$/.test(v) || Number(v) < min)
+		throw new Error(`${flag}는 ${min} 이상의 정수여야 한다: "${v}"`);
+	return Number(v);
+}
 
 // 열림 · 기다림 끝 · 담당 없음 · 재계획 잠금 아님. 잠금은 아래로 번진다
 function collect(t: Tree, locked: boolean, out: Tree[]) {
@@ -37,7 +50,7 @@ function collect(t: Tree, locked: boolean, out: Tree[]) {
 		t.kind === "leaf" &&
 		!locked &&
 		t.state === "open" &&
-		t.assignees.length === 0 &&
+		!taken(t) &&
 		t.blockedBy.every((b) => b.state === "closed")
 	)
 		out.push(t);
@@ -50,7 +63,7 @@ export function ready(tree: Tree, focus: number, dial: number): Tree[] {
 	const p = path(tree, focus);
 	if (!p) throw new Error(`집중 노드 #${focus}가 트리에 없다`);
 	const busy = all(tree).filter(
-		(t) => t.kind === "leaf" && t.state === "open" && t.assignees.length > 0,
+		(t) => t.kind === "leaf" && t.state === "open" && taken(t),
 	);
 	const out: Tree[] = [];
 	for (let d = 0; d <= dial && d < p.length; d++) {
@@ -107,7 +120,7 @@ export async function claim(
 			.split("\n")
 			.filter(Boolean)
 			.map((l): Comment => JSON.parse(l))
-			.filter((c) => /^claim: \S+\s*$/.test(c.body))
+			.filter((c) => isClaim(c.body))
 			.sort((a, b) =>
 				a.created_at === b.created_at
 					? a.id - b.id
@@ -168,19 +181,20 @@ if (import.meta.main) {
 	});
 	if (!values.repo || !values.root)
 		throw new Error("--repo와 --root가 필요하다");
-	const root = Number(values.root);
+	const root = num("--root", values.root, 1);
+	const focus =
+		values.focus === undefined ? root : num("--focus", values.focus, 1);
+	const dial =
+		values.dial === undefined ? Infinity : num("--dial", values.dial, 0);
+	const workers = num("--workers", values.workers, 1);
 	const tree = await readTree(values.repo, root, sh);
-	const leaves = ready(
-		tree,
-		Number(values.focus ?? root),
-		values.dial === undefined ? Infinity : Number(values.dial),
-	);
+	const leaves = ready(tree, focus, dial);
 	const account = (await sh("gh", ["api", "user", "--jq", ".login"]))
 		.trim()
 		.toLowerCase();
 	const got = await claim(values.repo, leaves, sh, {
 		account,
-		workers: Number(values.workers),
+		workers,
 	});
 	console.log(
 		JSON.stringify(

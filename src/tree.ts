@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { type Run, sh } from "./leaf.ts";
 
 type State = "open" | "closed";
+export type Comment = { id: number; body: string; createdAt: string };
 export type Tree = {
 	number: number;
 	title: string;
@@ -15,6 +16,7 @@ export type Tree = {
 	replan: boolean; // 재계획 중: 아래 잎을 고르지 않는다
 	stuck: number; // 막힘 횟수
 	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
+	comments: Comment[]; // claim과 막힘 이유를 읽는다
 	children: Tree[];
 };
 
@@ -53,6 +55,7 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
       assignees(first: 100) { nodes { login } }
       subIssues(first: 100) { nodes { number } }
       blockedBy(first: 100) { nodes { number state } }
+      comments(last: 100) { nodes { databaseId body createdAt } }
     }
   }
 }`;
@@ -66,6 +69,9 @@ type Raw = {
 	assignees: { nodes: { login: string }[] };
 	subIssues: { nodes: { number: number }[] };
 	blockedBy: { nodes: { number: number; state: string }[] };
+	comments: {
+		nodes: { databaseId: number; body: string; createdAt: string }[];
+	};
 };
 
 const lower = (s: string) => s.toLowerCase() as State;
@@ -113,6 +119,11 @@ export async function readTree(
 			...labels.map((l) => Number(l.match(/^stuck-(\d+)$/)?.[1] ?? 0)),
 		),
 		scope: scope(i.body),
+		comments: i.comments.nodes.map((c) => ({
+			id: c.databaseId,
+			body: c.body,
+			createdAt: c.createdAt,
+		})),
 		children: await Promise.all(
 			i.subIssues.nodes.map((c) => readTree(repo, c.number, run)),
 		),

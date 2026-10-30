@@ -15,6 +15,7 @@ const issues: Record<number, object> = {
 		assignees: { nodes: [] },
 		subIssues: { nodes: [{ number: 2 }, { number: 3 }] },
 		blockedBy: { nodes: [] },
+		comments: { nodes: [] },
 	},
 	2: {
 		number: 2,
@@ -25,6 +26,7 @@ const issues: Record<number, object> = {
 		assignees: { nodes: [] },
 		subIssues: { nodes: [{ number: 4 }] },
 		blockedBy: { nodes: [] },
+		comments: { nodes: [] },
 	},
 	3: {
 		number: 3,
@@ -40,6 +42,15 @@ const issues: Record<number, object> = {
 				{ number: 9, state: "CLOSED" },
 			],
 		},
+		comments: {
+			nodes: [
+				{
+					databaseId: 70,
+					body: "claim: bot/worker-1",
+					createdAt: "2026-10-30T00:00:00Z",
+				},
+			],
+		},
 	},
 	4: {
 		number: 4,
@@ -50,6 +61,7 @@ const issues: Record<number, object> = {
 		assignees: { nodes: [] },
 		subIssues: { nodes: [] },
 		blockedBy: { nodes: [] },
+		comments: { nodes: [] },
 	},
 };
 
@@ -76,6 +88,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 		replan: false,
 		stuck: 0,
 		scope: [],
+		comments: [],
 		children: [
 			{
 				number: 2,
@@ -87,6 +100,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				replan: true,
 				stuck: 0,
 				scope: [],
+				comments: [],
 				children: [
 					{
 						number: 4,
@@ -98,6 +112,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 						replan: false,
 						stuck: 0,
 						scope: [],
+						comments: [],
 						children: [],
 					},
 				],
@@ -115,6 +130,13 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				replan: false,
 				stuck: 2,
 				scope: ["src/a.ts", "src/b/"],
+				comments: [
+					{
+						id: 70,
+						body: "claim: bot/worker-1",
+						createdAt: "2026-10-30T00:00:00Z",
+					},
+				],
 				children: [],
 			},
 		],
