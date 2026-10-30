@@ -173,7 +173,7 @@ export async function runLeaves(o: Opts, run: Run): Promise<Result[]> {
 }
 
 const exec = promisify(execFile);
-const sh: Run = async (cmd, args, cwd) => {
+export const sh: Run = async (cmd, args, cwd) => {
 	try {
 		const p = exec(cmd, args, { cwd, maxBuffer: 64 << 20 });
 		p.child.stdin?.end(); // claude -p는 stdin이 열려 있으면 3초 기다린다
