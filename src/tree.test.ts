@@ -1,0 +1,160 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import type { Run } from "./leaf.ts";
+import { ensureLabels, readTree } from "./tree.ts";
+
+// GraphQL 응답 모양 그대로의 가짜 이슈들
+const issues: Record<number, object> = {
+	1: {
+		number: 1,
+		title: "뿌리",
+		state: "OPEN",
+		labels: { nodes: [{ name: "node" }] },
+		assignees: { nodes: [] },
+		subIssues: { nodes: [{ number: 2 }, { number: 3 }] },
+		blockedBy: { nodes: [] },
+	},
+	2: {
+		number: 2,
+		title: "가지",
+		state: "OPEN",
+		labels: { nodes: [{ name: "node" }, { name: "replan" }] },
+		assignees: { nodes: [] },
+		subIssues: { nodes: [{ number: 4 }] },
+		blockedBy: { nodes: [] },
+	},
+	3: {
+		number: 3,
+		title: "잎 A",
+		state: "OPEN",
+		labels: { nodes: [{ name: "leaf" }, { name: "stuck-2" }] },
+		assignees: { nodes: [{ login: "bot" }] },
+		subIssues: { nodes: [] },
+		blockedBy: {
+			nodes: [
+				{ number: 4, state: "OPEN" },
+				{ number: 9, state: "CLOSED" },
+			],
+		},
+	},
+	4: {
+		number: 4,
+		title: "잎 B",
+		state: "CLOSED",
+		labels: { nodes: [{ name: "leaf" }] },
+		assignees: { nodes: [] },
+		subIssues: { nodes: [] },
+		blockedBy: { nodes: [] },
+	},
+};
+
+function fake() {
+	const calls: string[] = [];
+	const run: Run = async (cmd, args) => {
+		calls.push([cmd, ...args].join(" "));
+		const n = Number(args.find((a) => a.startsWith("number="))?.slice(7));
+		return JSON.stringify({ data: { repository: { issue: issues[n] } } });
+	};
+	return { calls, run };
+}
+
+test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", async () => {
+	const { calls, run } = fake();
+	const tree = await readTree("o/r", 1, run);
+	assert.deepEqual(tree, {
+		number: 1,
+		title: "뿌리",
+		state: "open",
+		kind: "node",
+		assignees: [],
+		blockedBy: [],
+		replan: false,
+		stuck: 0,
+		children: [
+			{
+				number: 2,
+				title: "가지",
+				state: "open",
+				kind: "node",
+				assignees: [],
+				blockedBy: [],
+				replan: true,
+				stuck: 0,
+				children: [
+					{
+						number: 4,
+						title: "잎 B",
+						state: "closed",
+						kind: "leaf",
+						assignees: [],
+						blockedBy: [],
+						replan: false,
+						stuck: 0,
+						children: [],
+					},
+				],
+			},
+			{
+				number: 3,
+				title: "잎 A",
+				state: "open",
+				kind: "leaf",
+				assignees: ["bot"],
+				blockedBy: [
+					{ number: 4, state: "open" },
+					{ number: 9, state: "closed" },
+				],
+				replan: false,
+				stuck: 2,
+				children: [],
+			},
+		],
+	});
+	assert.equal(calls.length, 4);
+	assert.ok(calls[0].startsWith("gh api graphql"), calls[0]);
+	assert.ok(calls[0].includes("owner=o") && calls[0].includes("name=r"));
+});
+
+test("없는 이슈면 번호를 말하며 실패한다", async () => {
+	const run: Run = async () =>
+		JSON.stringify({ data: { repository: { issue: null } } });
+	await assert.rejects(readTree("o/r", 42, run), /#42/);
+});
+
+test("상태 라벨을 덮어쓰기로 만든다", async () => {
+	const calls: string[] = [];
+	const run: Run = async (cmd, args) => {
+		calls.push([cmd, ...args].join(" "));
+		return "";
+	};
+	await ensureLabels("o/r", run);
+	for (const l of ["node", "leaf", "replan", "stuck-1", "stuck-2", "stuck-3"])
+		assert.ok(
+			calls.some((c) => c.startsWith(`gh label create ${l} -R o/r`)),
+			l,
+		);
+	assert.ok(calls.every((c) => c.includes("--force")));
+});
+
+test("이슈 템플릿에 블록 목록의 칸이 다 있다", () => {
+	const read = (f: string) =>
+		readFileSync(
+			new URL(`../.github/ISSUE_TEMPLATE/${f}`, import.meta.url),
+			"utf8",
+		);
+	const node = read("node.md");
+	assert.match(node, /^labels: node$/m);
+	for (const h of ["목표", "인수 테스트", "자식끼리의 약속", "바뀐 약속"])
+		assert.match(node, new RegExp(`^## ${h}`, "m"), h);
+	const leaf = read("leaf.md");
+	assert.match(leaf, /^labels: leaf$/m);
+	for (const h of [
+		"목표",
+		"지킬 약속",
+		"끝 기준 테스트",
+		"범위",
+		"기다릴 티켓",
+	])
+		assert.match(leaf, new RegExp(`^## ${h}`, "m"), h);
+});
