@@ -43,28 +43,27 @@ export function num(flag: string, v: string, min: number): number {
 	return Number(v);
 }
 
-// 열림 · 기다림 끝 · 담당 없음 · 재계획 잠금 아님. 잠금은 아래로 번진다
-function collect(t: Tree, locked: boolean, out: Tree[]) {
+// 열림 · 담당 없음 · 재계획 잠금 아님 · want. 잠금은 아래로 번진다
+function collect(
+	t: Tree,
+	locked: boolean,
+	want: (t: Tree) => boolean,
+	out: Tree[],
+) {
 	locked ||= t.replan;
-	if (
-		t.kind === "leaf" &&
-		!locked &&
-		t.state === "open" &&
-		!taken(t) &&
-		t.blockedBy.every((b) => b.state === "closed")
-	)
-		out.push(t);
-	for (const c of t.children) collect(c, locked, out);
+	if (!locked && t.state === "open" && !taken(t) && want(t)) out.push(t);
+	for (const c of t.children) collect(c, locked, want, out);
 }
 
-// 집중 노드 아래(거리 0) → 한 층 위 아래(사촌, 1) → … dial 층까지. 같은 거리는 이슈 트리 순서.
-// 이미 담당이 걸린 열린 잎과 범위가 겹치는 잎은 뺀다
-export function ready(tree: Tree, focus: number, dial: number): Tree[] {
+// 집중 노드 아래(거리 0) → 한 층 위 아래(사촌, 1) → … dial 층까지. 같은 거리는 이슈 트리 순서
+export function near(
+	tree: Tree,
+	focus: number,
+	dial: number,
+	want: (t: Tree) => boolean,
+): Tree[] {
 	const p = path(tree, focus);
 	if (!p) throw new Error(`집중 노드 #${focus}가 트리에 없다`);
-	const busy = all(tree).filter(
-		(t) => t.kind === "leaf" && t.state === "open" && taken(t),
-	);
 	const out: Tree[] = [];
 	for (let d = 0; d <= dial && d < p.length; d++) {
 		const at = p.length - 1 - d;
@@ -72,14 +71,30 @@ export function ready(tree: Tree, focus: number, dial: number): Tree[] {
 		collect(
 			p[at],
 			p.slice(0, at).some((n) => n.replan),
+			want,
 			found,
 		);
-		for (const l of found)
-			if (!out.includes(l) && !busy.some((b) => overlaps(b.scope, l.scope)))
-				out.push(l);
+		for (const t of found) if (!out.includes(t)) out.push(t);
 	}
 	return out;
 }
+
+// 기다림이 끝난 잎. 이미 담당이 걸린 열린 잎과 범위가 겹치는 잎은 뺀다
+export function ready(tree: Tree, focus: number, dial: number): Tree[] {
+	const busy = all(tree).filter(
+		(t) => t.kind === "leaf" && t.state === "open" && taken(t),
+	);
+	return near(
+		tree,
+		focus,
+		dial,
+		(t) => t.kind === "leaf" && t.blockedBy.every((b) => b.state === "closed"),
+	).filter((l) => !busy.some((b) => overlaps(b.scope, l.scope)));
+}
+
+// 아직 안 쪼갠 노드: 자식이 하나도 없다
+export const unsplit = (tree: Tree, focus: number, dial: number) =>
+	near(tree, focus, dial, (t) => t.kind === "node" && t.children.length === 0);
 
 export type Claim = { leaf: Tree; worker: string; comment: number };
 type Comment = { id: number; created_at: string; body: string };

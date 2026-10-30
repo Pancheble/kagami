@@ -46,7 +46,9 @@ export async function ensureLabels(repo: string, run: Run) {
 		]);
 }
 
-// ponytail: 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
+// ponytail: 댓글 말고는 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
+const PAGE =
+	"pageInfo { hasNextPage endCursor } nodes { databaseId body createdAt }";
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
@@ -55,8 +57,14 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
       assignees(first: 100) { nodes { login } }
       subIssues(first: 100) { nodes { number } }
       blockedBy(first: 100) { nodes { number state } }
-      comments(last: 100) { nodes { databaseId body createdAt } }
+      comments(first: 100) { ${PAGE} }
     }
+  }
+}`;
+// 댓글은 claim과 막힘 이유가 있어 끝까지 읽는다
+const MORE = `query($owner: String!, $name: String!, $number: Int!, $after: String!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) { comments(first: 100, after: $after) { ${PAGE} } }
   }
 }`;
 
@@ -69,9 +77,11 @@ type Raw = {
 	assignees: { nodes: { login: string }[] };
 	subIssues: { nodes: { number: number }[] };
 	blockedBy: { nodes: { number: number; state: string }[] };
-	comments: {
-		nodes: { databaseId: number; body: string; createdAt: string }[];
-	};
+	comments: Page;
+};
+type Page = {
+	pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+	nodes: { databaseId: number; body: string; createdAt: string }[];
 };
 
 const lower = (s: string) => s.toLowerCase() as State;
@@ -88,20 +98,31 @@ export async function readTree(
 	run: Run,
 ): Promise<Tree> {
 	const [owner, name] = repo.split("/");
-	const out = await run("gh", [
-		"api",
-		"graphql",
-		"-f",
-		`query=${QUERY}`,
-		"-f",
-		`owner=${owner}`,
-		"-f",
-		`name=${name}`,
-		"-F",
-		`number=${number}`,
-	]);
-	const i: Raw | null = JSON.parse(out).data.repository.issue;
+	const query = async (q: string, ...more: string[]) =>
+		JSON.parse(
+			await run("gh", [
+				"api",
+				"graphql",
+				"-f",
+				`query=${q}`,
+				"-f",
+				`owner=${owner}`,
+				"-f",
+				`name=${name}`,
+				"-F",
+				`number=${number}`,
+				...more,
+			]),
+		).data.repository.issue;
+	const i: Raw | null = await query(QUERY);
 	if (!i) throw new Error(`${repo}#${number} 이슈가 없다`);
+	const comments = [...i.comments.nodes];
+	for (let p = i.comments.pageInfo; p?.hasNextPage; ) {
+		const next: Page = (await query(MORE, "-f", `after=${p.endCursor}`))
+			.comments;
+		comments.push(...next.nodes);
+		p = next.pageInfo;
+	}
 	const labels = i.labels.nodes.map((l) => l.name);
 	return {
 		number: i.number,
@@ -119,7 +140,7 @@ export async function readTree(
 			...labels.map((l) => Number(l.match(/^stuck-(\d+)$/)?.[1] ?? 0)),
 		),
 		scope: scope(i.body),
-		comments: i.comments.nodes.map((c) => ({
+		comments: comments.map((c) => ({
 			id: c.databaseId,
 			body: c.body,
 			createdAt: c.createdAt,

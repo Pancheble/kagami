@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Run } from "./leaf.ts";
-import { claim, num, overlaps, ready, release } from "./pick.ts";
+import { claim, num, overlaps, ready, release, unsplit } from "./pick.ts";
 import type { Tree } from "./tree.ts";
 
 const node = (number: number, children: Tree[], replan = false): Tree => ({
@@ -71,6 +71,21 @@ test("닫힘 · 기다림 남음 · 담당 있음 · 재계획 잠금인 잎은 
 test("집중 노드 위가 잠겨 있으면 그 아래는 고르지 않는다", () => {
 	const t = node(1, [node(2, [node(3, [leaf(10)]), leaf(20)], true), leaf(30)]);
 	assert.deepEqual(nums(ready(t, 3, Infinity)), [30]);
+});
+
+test("안 쪼갠 노드(자식 없음)를 가까운 순으로. 닫힘 · 담당 있음 · 재계획 잠금은 빼고, 다이얼을 지킨다", () => {
+	const t = node(1, [
+		node(2, [node(3, []), node(4, [], true), leaf(10)]),
+		node(5, []),
+		node(6, [node(7, [])], true),
+		{ ...node(8, []), state: "closed" },
+		{
+			...node(9, []),
+			comments: [{ id: 1, body: "claim: x/worker-1", createdAt: "" }],
+		},
+	]);
+	assert.deepEqual(nums(unsplit(t, 2, Infinity)), [3, 5]);
+	assert.deepEqual(nums(unsplit(t, 2, 0)), [3]);
 });
 
 test("없는 집중 노드면 번호를 말하며 실패한다", () => {
