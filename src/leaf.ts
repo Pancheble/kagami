@@ -3,14 +3,17 @@
 // 실행: node src/leaf.ts --repo owner/name --dir <로컬 클론> --root <뿌리>
 //       [--focus <집중 노드>] [--dial <층 수>] [--workers 1] [--ttl <시간>] [--claude <claude 경로>]
 // 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
+// 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
 import { execFile } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import {
 	all,
+	beat,
 	type Claim,
 	claim,
 	isClaim,
@@ -18,8 +21,10 @@ import {
 	path,
 	ready,
 	release,
+	replans,
 	unsplit,
 } from "./pick.ts";
+import { replan } from "./replan.ts";
 import { split } from "./split.ts";
 import { readTree, type Tree } from "./tree.ts";
 
@@ -27,6 +32,7 @@ export type Run = (
 	cmd: string,
 	args: string[],
 	cwd?: string,
+	env?: NodeJS.ProcessEnv, // 없으면 하네스 환경 그대로
 ) => Promise<string>;
 export type Opts = {
 	repo: string;
@@ -42,14 +48,15 @@ export type Opts = {
 export type Result = {
 	issue: number;
 	pr: number; // PR을 만들기 전에 막혔으면 0
-	outcome: "merged" | "stuck";
+	// human: 사람이 정할 때까지 멈춤 · up: 재계획을 한 층 위로 올림
+	outcome: "merged" | "stuck" | "human" | "up";
 };
 
 const EVALUATOR = fileURLToPath(
 	new URL("../.claude/agents/evaluator.md", import.meta.url),
 );
 export const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
-const STUCKS = 3; // 막힘이 이만큼이면 부모에 재계획 신호
+export const STUCKS = 3; // 막힘이 이만큼이면 부모에 재계획 신호
 
 // 프롬프트는 하네스 저장소의 prompts/<이름>.md. {{키}}를 채운다. 권한은 여기 말고 CLI 플래그로 건다
 export const prompt = (name: string, vars: Record<string, string>) =>
@@ -57,10 +64,38 @@ export const prompt = (name: string, vars: Record<string, string>) =>
 		.trimEnd()
 		.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
 
+// 열쇠를 안 준다: 세션 환경에서 GitHub·git 인증을 뺀다. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
+// 그래서 허용된 node -e로 gh나 git push를 불러도 인증이 없어 실패한다. claude 자신의 로그인은 그대로다.
+// push·PR·이슈·fetch는 하네스만 한다
+export function noKey(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	for (const k of [
+		"GH_TOKEN",
+		"GITHUB_TOKEN",
+		"GH_ENTERPRISE_TOKEN",
+		"GITHUB_ENTERPRISE_TOKEN",
+		"SSH_AUTH_SOCK",
+	])
+		delete env[k];
+	return Object.assign(env, {
+		GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), "nokey-")), // 빈 폴더: gh가 로그인을 못 찾는다
+		GIT_TERMINAL_PROMPT: "0",
+		GIT_SSH_COMMAND: "false",
+		// 명령줄 설정으로 credential.helper를 빈 값으로: 앞서 읽은 도우미 목록(키체인 등)을 비운다
+		GIT_CONFIG_COUNT: "1",
+		GIT_CONFIG_KEY_0: "credential.helper",
+		GIT_CONFIG_VALUE_0: "",
+	});
+}
+
+// claude -p 세션은 모두 여기서 띄운다(구현자·평가자·쪼개기·재계획). 권한은 args의 플래그로 건다
+export const session = (o: Opts, args: string[], cwd: string, run: Run) =>
+	run(o.claude, args, cwd, noKey());
+
 // 평가자: 매 라운드 새 세션, 쓰기 도구 없음. 구현자의 출력은 넘기지 않는다
 export const evaluate = (text: string, wt: string, o: Opts, run: Run) =>
-	run(
-		o.claude,
+	session(
+		o,
 		[
 			"-p",
 			text,
@@ -73,6 +108,7 @@ export const evaluate = (text: string, wt: string, o: Opts, run: Run) =>
 			"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
 		],
 		wt,
+		run,
 	);
 
 export function verdict(report: string): "PASS" | "NEEDS_WORK" {
@@ -99,11 +135,32 @@ async function waitChecks(pr: number, o: Opts, run: Run, cwd: string) {
 
 export const quiet = (p: Promise<unknown>) => p.catch(() => {});
 export const firstLine = (s: string) => s.split("\n")[0];
-const stuckNotes = (t: Tree) =>
+export const stuckNotes = (t: Tree) =>
 	t.comments.map((c) => c.body).filter((b) => /^막힘 \d+\/\d+: /.test(b));
-// 시도마다 새 브랜치. 노드는 쪼개기 브랜치
+// 시도마다 새 브랜치. 노드는 쪼개기, replan이 걸린 노드는 재계획 브랜치
 export const branchOf = (t: Tree) =>
-	`${t.kind === "node" ? "split" : "leaf"}/${t.number}-${t.stuck + 1}`;
+	`${t.kind === "leaf" ? "leaf" : t.replan ? "replan" : "split"}/${t.number}-${t.stuck + 1}`;
+
+// 라벨은 필요할 때 만든다(막힘 4번째의 stuck-4, human 등). 이미 있으면 create가 실패하고 그냥 넘어간다
+export async function relabel(
+	n: number,
+	add: string[],
+	remove: string[],
+	o: Pick<Opts, "repo">,
+	run: Run,
+) {
+	for (const l of add)
+		await quiet(run("gh", ["label", "create", l, "-R", o.repo]));
+	await run("gh", [
+		"issue",
+		"edit",
+		String(n),
+		"-R",
+		o.repo,
+		...add.flatMap((l) => ["--add-label", l]),
+		...remove.flatMap((l) => ["--remove-label", l]),
+	]);
+}
 export const worktreeOf = (t: Tree, o: Opts) => `${o.dir}-wt/${branchOf(t)}`;
 
 // 막힘과 끊긴 시도(claim 만료)가 같이 지나는 길: 이번 시도의 흔적을 치우고
@@ -132,16 +189,13 @@ export async function giveUp(
 	);
 	await quiet(run("git", ["branch", "-D", branchOf(leaf)], o.dir));
 	for (const c of claims) await release(o.repo, c, run);
-	await run("gh", [
-		"issue",
-		"edit",
-		n,
-		"-R",
-		o.repo,
-		"--add-label",
-		`stuck-${k}`,
-		...(k > 1 ? ["--remove-label", `stuck-${k - 1}`] : []),
-	]);
+	await relabel(
+		leaf.number,
+		[`stuck-${k}`],
+		k > 1 ? [`stuck-${k - 1}`] : [],
+		o,
+		run,
+	);
 	const note = `막힘 ${k}/${STUCKS}: ${why}`;
 	await run("gh", [
 		"issue",
@@ -152,18 +206,10 @@ export async function giveUp(
 		"--body",
 		detail ? `${note}\n\n${detail}` : note,
 	]);
-	// ponytail: 뿌리가 잎이면 부모가 없어 신호를 못 낸다. 막힘 4번째부터는 T6이 replan을 뗀 뒤의 일이다
+	// ponytail: 뿌리가 잎이면 부모가 없어 신호를 못 낸다
 	const parent = path(tree, leaf.number)?.at(-2);
 	if (k < STUCKS || !parent) return;
-	await run("gh", [
-		"issue",
-		"edit",
-		String(parent.number),
-		"-R",
-		o.repo,
-		"--add-label",
-		"replan",
-	]);
+	await relabel(parent.number, ["replan"], [], o, run);
 	const reasons = [...stuckNotes(leaf), note].map((b) => `- ${firstLine(b)}`);
 	await run("gh", [
 		"issue",
@@ -247,8 +293,8 @@ async function attempt(
 		let fix: string | undefined = "";
 		while (fails < FAILS) {
 			if (fix !== undefined) {
-				await run(
-					o.claude,
+				await session(
+					o,
 					[
 						"-p",
 						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
@@ -258,6 +304,7 @@ async function attempt(
 						"Bash(npm test),Bash(npm run *),Bash(node *),Bash(git status),Bash(git diff *)",
 					],
 					wt,
+					run,
 				);
 				await run("git", ["add", "-A"], wt);
 				await run(
@@ -336,20 +383,21 @@ async function expire(tree: Tree, o: Opts, run: Run): Promise<boolean> {
 	let any = false;
 	for (const t of all(tree)) {
 		if (t.state !== "open") continue;
+		// 만료는 마지막 갱신 기준: 하트비트가 claim 댓글을 고쳐 쓰면 updatedAt이 밀린다
 		const old = t.comments.filter(
-			(c) => isClaim(c.body) && Date.parse(c.createdAt) < cutoff,
+			(c) => isClaim(c.body) && Date.parse(c.updatedAt) < cutoff,
 		);
 		if (!old.length) continue;
 		const claims = old.map((c) => ({
 			leaf: t,
-			worker: c.body.slice(7).trim(),
+			worker: firstLine(c.body).slice(7).trim(),
 			comment: c.id,
 		}));
 		await giveUp(
 			tree,
 			t,
 			claims,
-			`시도가 끊겼다 (claim 만료: ${claims[0].worker}, ${old[0].createdAt})`,
+			`시도가 끊겼다 (claim 만료: ${claims[0].worker}, 마지막 갱신 ${old[0].updatedAt})`,
 			"",
 			o,
 			run,
@@ -363,22 +411,46 @@ async function expire(tree: Tree, o: Opts, run: Run): Promise<boolean> {
 // 머지 잠금은 아니다: CI 기다리기와 dev fast-forward 판정은 줄 밖이다. 프로세스가 여럿이면 클론을 나눈다
 function oneGit(run: Run): Run {
 	let line: Promise<unknown> = Promise.resolve();
-	return (cmd, args, cwd) => {
-		if (cmd !== "git") return run(cmd, args, cwd);
-		const next = line.then(() => run(cmd, args, cwd));
+	return (cmd, args, cwd, env) => {
+		if (cmd !== "git") return run(cmd, args, cwd, env);
+		const next = line.then(() => run(cmd, args, cwd, env));
 		line = next.catch(() => {});
 		return next;
 	};
 }
 
-// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → (쪼개기 신호) → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
+// claim을 쥔 동안 ttl/3마다 하트비트를 친다
+const holding = async (
+	c: Claim,
+	o: Opts,
+	run: Run,
+	f: () => Promise<Result>,
+) => {
+	const stop = beat(o.repo, c, (o.ttl * 3_600_000) / 3, run);
+	try {
+		return await f();
+	} finally {
+		stop();
+	}
+};
+
+// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → (재계획) → (쪼개기 신호) → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
 // ponytail: 한 번 고르고 끝난다. 다음 잎으로 계속 도는 루프는 정지 파일과 함께 T10
 export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 	const run = oneGit(raw);
 	let tree = await readTree(o.repo, o.root, run);
 	if (await expire(tree, o, run)) tree = await readTree(o.repo, o.root, run);
-	let leaves = ready(tree, o.focus, o.dial);
 	const done: Result[] = [];
+	// 재계획: replan 노드 하나를 claim(재계획 잠금)하고 다시 짠다. 아래 잎 고르기는 replan 라벨이 막고 있다
+	// 한 번에 노드 하나. 다른 프로세스에 claim을 지면 다음 replan 노드로
+	const [r] = await claim(o.repo, replans(tree), run, {
+		account: o.account,
+	});
+	if (r) {
+		done.push(await holding(r, o, run, () => replan(tree, r, o, run)));
+		tree = await readTree(o.repo, o.root, run);
+	}
+	let leaves = ready(tree, o.focus, o.dial);
 	// 쪼개기 신호: 준비된 잎이 일꾼 수보다 적으면 가장 가까운 안 쪼갠 노드를 쪼개고 다시 고른다
 	// ponytail: 한 번에 노드 하나. 모자란 만큼 여러 노드를 쪼개는 건 일꾼이 여럿일 때
 	if (leaves.length < o.workers) {
@@ -386,7 +458,7 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 			account: o.account,
 		});
 		if (c) {
-			done.push(await split(tree, c, o, run));
+			done.push(await holding(c, o, run, () => split(tree, c, o, run)));
 			tree = await readTree(o.repo, o.root, run);
 			leaves = ready(tree, o.focus, o.dial);
 		}
@@ -397,7 +469,9 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 	});
 	return [
 		...done,
-		...(await Promise.all(got.map((c) => attempt(tree, c, o, run)))),
+		...(await Promise.all(
+			got.map((c) => holding(c, o, run, () => attempt(tree, c, o, run))),
+		)),
 	];
 }
 
@@ -429,9 +503,9 @@ function alive(pid: number): boolean {
 }
 
 const exec = promisify(execFile);
-export const sh: Run = async (cmd, args, cwd) => {
+export const sh: Run = async (cmd, args, cwd, env) => {
 	try {
-		const p = exec(cmd, args, { cwd, maxBuffer: 64 << 20 });
+		const p = exec(cmd, args, { cwd, env, maxBuffer: 64 << 20 });
 		p.child.stdin?.end(); // claude -p는 stdin이 열려 있으면 3초 기다린다
 		return (await p).stdout;
 	} catch (e) {
@@ -475,5 +549,6 @@ if (import.meta.main) {
 		.toLowerCase();
 	const results = await runLeaves({ ...o, account }, sh);
 	console.log(JSON.stringify(results, null, 2));
-	if (results.some((r) => r.outcome !== "merged")) process.exitCode = 1;
+	if (results.some((r) => r.outcome === "stuck" || r.outcome === "human"))
+		process.exitCode = 1;
 }

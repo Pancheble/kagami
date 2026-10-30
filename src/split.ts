@@ -23,6 +23,7 @@ import {
 	quiet,
 	type Result,
 	type Run,
+	session,
 	verdict,
 	worktreeOf,
 } from "./leaf.ts";
@@ -39,7 +40,22 @@ export type Ticket = {
 };
 export type Plan = { asIs: boolean; leaves: Ticket[] }; // asIs: 노드가 그대로 잎
 
-const str = { type: "string", minLength: 1 };
+// 노드 세션(쪼개기·재계획)의 권한: worktree에 쓰고 테스트를 돌린다. gh는 없다. 읽을 것은 프롬프트로 준다
+export const WRITE = [
+	"--permission-mode",
+	"acceptEdits",
+	"--allowedTools",
+	"Bash(node *),Bash(npm *),Bash(git status),Bash(git diff *)",
+];
+
+export const str = { type: "string", minLength: 1 };
+export const TICKET = {
+	title: str,
+	goal: str,
+	promises: str,
+	test: str,
+	scope: { type: "array", items: str },
+};
 const SCHEMA = JSON.stringify({
 	type: "object",
 	additionalProperties: false,
@@ -54,11 +70,7 @@ const SCHEMA = JSON.stringify({
 				additionalProperties: false,
 				required: ["title", "goal", "promises", "test", "scope", "waitFor"],
 				properties: {
-					title: str,
-					goal: str,
-					promises: str,
-					test: str,
-					scope: { type: "array", items: str },
+					...TICKET,
 					waitFor: { type: "array", items: { type: "integer", minimum: 0 } },
 				},
 			},
@@ -91,19 +103,20 @@ const TESTS = /\.(accept|contract)\.[cm]?[jt]sx?$/;
 type Row = { name: string; ok: boolean; error: string };
 
 // 처음엔 빨강: contracts/<노드>/의 계약·인수 테스트를 파일마다 돌려, 테스트 하나하나가
-// "not implemented"로 실패해야 통과다. 불러오기 실패·문법 에러·테스트 없음·통과는 빨강이 아니다
+// "not implemented"로 실패해야 통과다. 불러오기 실패·문법 에러·테스트 없음·통과는 빨강이 아니다.
+// changed(재계획)면 이번에 새로 쓰거나 고친 파일만 본다. 이미 있던 테스트는 닫힌 잎이 초록으로 만들었을 수 있다
 export async function red(
 	n: number,
 	wt: string,
 	run: Run,
+	changed = false,
 ): Promise<{ ok: boolean; report: string }> {
 	const files = (
 		await run(
 			"git",
 			[
 				"ls-files",
-				"--cached",
-				"--others",
+				...(changed ? ["--others", "--modified"] : ["--cached", "--others"]),
 				"--exclude-standard",
 				"--",
 				`contracts/${n}`,
@@ -112,7 +125,9 @@ export async function red(
 		)
 	)
 		.split("\n")
-		.filter((f) => TESTS.test(f));
+		// --modified는 지운 파일도 내놓는다
+		.filter((f) => TESTS.test(f) && (!changed || existsSync(join(wt, f))));
+	if (!files.length && changed) return { ok: true, report: "새 테스트 없음" };
 	if (!files.length)
 		return {
 			ok: false,
@@ -159,34 +174,21 @@ export async function red(
 	return { ok, report: lines.join("\n") };
 }
 
-const sections = (t: Ticket) =>
+export const sections = (t: Omit<Ticket, "waitFor">) =>
 	`## 지킬 약속\n\n${t.promises}\n\n## 끝 기준 테스트\n\n${t.test}\n\n## 범위\n\n${t.scope.map((s) => `- ${s}`).join("\n")}\n`;
+export const ticketBody = (t: Omit<Ticket, "waitFor">) =>
+	`## 목표\n\n${t.goal}\n\n${sections(t)}`;
 
-// 잎 이슈를 만들어 노드의 하위 이슈로 달고 blocked-by를 건다. 그대로 잎이면 노드를 잎으로 바꾼다
+// 잎 이슈를 만들어 노드의 하위 이슈로 달고 blocked-by를 건다. 만든 이슈 번호를 돌려준다
 // ponytail: 이슈를 만들다 죽으면 자식이 일부만 남고, 자식이 있으니 다시 잇지 않는다. 생기면 leaves.json과 자식 제목을 맞춰 본다
-async function make(node: Tree, plan: Plan, body: string, o: Opts, run: Run) {
-	const n = String(node.number);
-	const comment = (text: string) =>
-		run("gh", ["issue", "comment", n, "-R", o.repo, "--body", text]);
-	if (plan.asIs) {
-		await run("gh", [
-			"issue",
-			"edit",
-			n,
-			"-R",
-			o.repo,
-			"--remove-label",
-			"node",
-			"--add-label",
-			"leaf",
-			"--body",
-			`${body.trimEnd()}\n\n${sections(plan.leaves[0])}`,
-		]);
-		await comment(`그대로 잎: 쪼개지 않고 잎으로 바꿨다 (contracts/${n}/)`);
-		return;
-	}
+export async function create(
+	node: Tree,
+	leaves: Ticket[],
+	o: Opts,
+	run: Run,
+): Promise<number[]> {
 	const made: { id: number; number: number }[] = [];
-	for (const t of plan.leaves) {
+	for (const t of leaves) {
 		const i = JSON.parse(
 			await run("gh", [
 				"api",
@@ -196,14 +198,14 @@ async function make(node: Tree, plan: Plan, body: string, o: Opts, run: Run) {
 				"-f",
 				`title=${t.title}`,
 				"-f",
-				`body=## 목표\n\n${t.goal}\n\n${sections(t)}`,
+				`body=${ticketBody(t)}`,
 				"-f",
 				"labels[]=leaf",
 			]),
 		);
 		await run("gh", [
 			"api",
-			`repos/${o.repo}/issues/${n}/sub_issues`,
+			`repos/${o.repo}/issues/${node.number}/sub_issues`,
 			"-X",
 			"POST",
 			"-F",
@@ -211,7 +213,7 @@ async function make(node: Tree, plan: Plan, body: string, o: Opts, run: Run) {
 		]);
 		made.push(i);
 	}
-	for (const [k, t] of plan.leaves.entries())
+	for (const [k, t] of leaves.entries())
 		for (const w of t.waitFor)
 			await run("gh", [
 				"api",
@@ -221,9 +223,142 @@ async function make(node: Tree, plan: Plan, body: string, o: Opts, run: Run) {
 				"-F",
 				`issue_id=${made[w].id}`,
 			]);
-	await comment(
-		`쪼갬: ${made.map((m) => `#${m.number}`).join(", ")} (contracts/${n}/)`,
-	);
+	return made.map((m) => m.number);
+}
+
+// check의 답: stop은 PR 없이 그 계획을 돌려준다 · fail은 FAIL 이유 · report는 통과(처음엔 빨강 결과를 PR 댓글로)
+export type Check =
+	| { stop: true }
+	| { fail: string; detail: string }
+	| { report: string };
+export type Landed<P> = {
+	plan?: P;
+	pr: number;
+	end: "merged" | "stop" | "fail";
+	why: string;
+	detail: string;
+};
+
+// 노드 세션 한 벌(쪼개기·재계획): worktree에서 세션이 테스트를 쓰고 계획을 구조화 출력으로 돌려주면
+// check → PR(빨강 댓글) → 약속 대조 → 순차 머지. FAIL이 FAILS번이면 그때 이유를 들고 끝난다(정리는 giveUp)
+export async function land<P>(
+	node: Tree,
+	o: Opts,
+	run: Run,
+	s: {
+		args: (fix: string) => string[]; // claude 인자. fix는 지난 FAIL 이유
+		check: (p: P, wt: string) => Promise<Check>;
+		ticket: string; // 약속 대조가 받는 노드 이슈
+		title: string;
+		body: string;
+	},
+): Promise<Landed<P>> {
+	const n = String(node.number);
+	const branch = branchOf(node);
+	const wt = worktreeOf(node, o);
+	const done = async () => {
+		await run("git", ["worktree", "remove", "--force", wt], o.dir);
+		await run("git", ["branch", "-D", branch], o.dir);
+	};
+	let plan: P | undefined;
+	let pr = 0;
+	let fails = 0;
+	let why = "";
+	let detail = "";
+	await run("git", ["worktree", "add", "-b", branch, wt, "origin/dev"], o.dir);
+	let fix: string | undefined = "";
+	while (fails < FAILS) {
+		if (fix !== undefined) {
+			const out = await session(o, s.args(fix && `\n\n${fix}`), wt, run);
+			plan = JSON.parse(out).structured_output as P | undefined;
+			if (!plan)
+				throw new Error(`세션이 구조화 출력을 돌려주지 않았다\n${out}`);
+			const c = await s.check(plan, wt);
+			if ("stop" in c) {
+				await done();
+				return { plan, pr, end: "stop", why, detail };
+			}
+			if ("fail" in c) {
+				fails++;
+				[why, detail] = [c.fail, c.detail];
+				fix = `${why}. 고쳐:\n\n${detail}`;
+				continue;
+			}
+			await run("git", ["add", "-A"], wt);
+			await run(
+				"git",
+				["commit", "--allow-empty", "-m", `#${n} ${s.title}`],
+				wt,
+			);
+			await run(
+				"git",
+				["push", "--force-with-lease", "-u", "origin", branch],
+				wt,
+			);
+			if (!pr) {
+				const url = await run(
+					"gh",
+					[
+						"pr",
+						"create",
+						"-R",
+						o.repo,
+						"--base",
+						"dev",
+						"--head",
+						branch,
+						"--title",
+						s.title,
+						"--body",
+						s.body,
+					],
+					wt,
+				);
+				pr = Number(url.trim().split("/").pop());
+			}
+			await run(
+				"gh",
+				[
+					"pr",
+					"comment",
+					String(pr),
+					"-R",
+					o.repo,
+					"--body",
+					`처음엔 빨강: contracts/${n}/\n\n${c.report}`,
+				],
+				wt,
+			);
+			const report = await evaluate(
+				prompt("promise-check", { ticket: s.ticket, node: n }),
+				wt,
+				o,
+				run,
+			);
+			await run(
+				"gh",
+				["pr", "comment", String(pr), "-R", o.repo, "--body", report],
+				wt,
+			);
+			if (verdict(report) !== "PASS") {
+				fails++;
+				why = `약속 대조 NEEDS_WORK (PR #${pr})`;
+				detail = report;
+				fix = `약속 대조 평가자가 NEEDS_WORK를 줬다. 보고서를 보고 고쳐:\n\n${report}`;
+				continue;
+			}
+		}
+		const failed = await merge(pr, wt, o, run);
+		if (!failed) {
+			await done();
+			await quiet(run("git", ["push", "origin", "--delete", branch], o.dir));
+			return { plan, pr, end: "merged", why, detail };
+		}
+		fails++;
+		[why, detail] = [firstLine(failed.why), failed.fix ?? failed.why];
+		fix = failed.fix;
+	}
+	return { plan, pr, end: "fail", why, detail };
 }
 
 // 한 번 쪼개기: claim을 쥔 채 FAIL이 FAILS번 될 때까지 다시 쪼갠다. 끝나면 잎 이슈가 생기거나 노드가 막힌다
@@ -237,10 +372,8 @@ export async function split(
 	const n = String(node.number);
 	const dir = `contracts/${n}`;
 	let pr = 0;
-	let fails = 0;
 	let why = "";
 	let detail = "";
-	let merged = false;
 	try {
 		await run("git", ["fetch", "origin", "dev"], o.dir);
 		// 머지와 이슈 만들기 사이에 죽었으면 다시 쪼개지 않고 dev의 leaves.json으로 이슈 만들기만 잇는다
@@ -262,130 +395,61 @@ export async function split(
 		]);
 		if (!plan) {
 			const ticket = `노드 이슈 #${n}: ${node.title}\n\n${body}`;
-			const branch = branchOf(node);
-			const wt = worktreeOf(node, o);
-			await run(
-				"git",
-				["worktree", "add", "-b", branch, wt, "origin/dev"],
-				o.dir,
-			);
-			let fix: string | undefined = "";
-			while (fails < FAILS) {
-				if (fix !== undefined) {
-					const out = await run(
-						o.claude,
-						[
-							"-p",
-							prompt("split", { node: n, ticket, fix: fix && `\n\n${fix}` }),
-							"--permission-mode",
-							"acceptEdits",
-							"--allowedTools",
-							"Bash(node *),Bash(npm *),Bash(git status),Bash(git diff *)",
-							"--output-format",
-							"json",
-							"--json-schema",
-							SCHEMA,
-						],
-						wt,
-					);
-					plan = JSON.parse(out).structured_output as Plan | undefined;
-					if (!plan)
-						throw new Error(`쪼개기 세션이 잎 티켓을 돌려주지 않았다\n${out}`);
-					const bad = problems(plan, node.number);
-					const r = bad.length ? undefined : await red(node.number, wt, run);
-					if (!r?.ok) {
-						fails++;
-						why = r ? "처음엔 빨강이 아니다" : "잎 조건이 안 맞는다";
-						detail = r ? r.report : bad.map((b) => `- ${b}`).join("\n");
-						fix = `${why}. 고쳐:\n\n${detail}`;
-						continue;
-					}
+			const l = await land<Plan>(node, o, run, {
+				args: (fix) => [
+					"-p",
+					prompt("split", { node: n, ticket, fix }),
+					...WRITE,
+					"--output-format",
+					"json",
+					"--json-schema",
+					SCHEMA,
+				],
+				check: async (p, wt) => {
+					const bad = problems(p, node.number);
+					if (bad.length)
+						return {
+							fail: "잎 조건이 안 맞는다",
+							detail: bad.map((b) => `- ${b}`).join("\n"),
+						};
+					const r = await red(node.number, wt, run);
+					if (!r.ok) return { fail: "처음엔 빨강이 아니다", detail: r.report };
 					mkdirSync(join(wt, dir), { recursive: true });
 					writeFileSync(
 						join(wt, dir, "leaves.json"),
-						`${JSON.stringify(plan, null, 2)}\n`,
+						`${JSON.stringify(p, null, 2)}\n`,
 					);
-					await run("git", ["add", "-A"], wt);
-					await run(
-						"git",
-						["commit", "--allow-empty", "-m", `#${n} 쪼개기`],
-						wt,
-					);
-					await run(
-						"git",
-						["push", "--force-with-lease", "-u", "origin", branch],
-						wt,
-					);
-					if (!pr) {
-						const url = await run(
-							"gh",
-							[
-								"pr",
-								"create",
-								"-R",
-								o.repo,
-								"--base",
-								"dev",
-								"--head",
-								branch,
-								"--title",
-								`쪼개기: ${node.title}`,
-								"--body",
-								`#${n}을 잎 티켓과 계약·인수 테스트(${dir}/)로 쪼갠다`,
-							],
-							wt,
-						);
-						pr = Number(url.trim().split("/").pop());
-					}
-					await run(
-						"gh",
-						[
-							"pr",
-							"comment",
-							String(pr),
-							"-R",
-							o.repo,
-							"--body",
-							`처음엔 빨강: ${dir}/\n\n${r.report}`,
-						],
-						wt,
-					);
-					const report = await evaluate(
-						prompt("promise-check", { ticket, node: n }),
-						wt,
-						o,
-						run,
-					);
-					await run(
-						"gh",
-						["pr", "comment", String(pr), "-R", o.repo, "--body", report],
-						wt,
-					);
-					if (verdict(report) !== "PASS") {
-						fails++;
-						why = `약속 대조 NEEDS_WORK (PR #${pr})`;
-						detail = report;
-						fix = `약속 대조 평가자가 NEEDS_WORK를 줬다. 보고서를 보고 고쳐:\n\n${report}`;
-						continue;
-					}
-				}
-				const failed = await merge(pr, wt, o, run);
-				if (!failed) {
-					merged = true;
-					break;
-				}
-				fails++;
-				[why, detail] = [firstLine(failed.why), failed.fix ?? failed.why];
-				fix = failed.fix;
+					return { report: r.report };
+				},
+				ticket,
+				title: `쪼개기: ${node.title}`,
+				body: `#${n}을 잎 티켓과 계약·인수 테스트(${dir}/)로 쪼갠다`,
+			});
+			({ pr, why, detail } = l);
+			plan = l.end === "merged" ? l.plan : undefined;
+		}
+		if (plan) {
+			const comment = (text: string) =>
+				run("gh", ["issue", "comment", n, "-R", o.repo, "--body", text]);
+			if (plan.asIs) {
+				await run("gh", [
+					"issue",
+					"edit",
+					n,
+					"-R",
+					o.repo,
+					"--remove-label",
+					"node",
+					"--add-label",
+					"leaf",
+					"--body",
+					`${body.trimEnd()}\n\n${sections(plan.leaves[0])}`,
+				]);
+				await comment(`그대로 잎: 쪼개지 않고 잎으로 바꿨다 (${dir}/)`);
+			} else {
+				const made = await create(node, plan.leaves, o, run);
+				await comment(`쪼갬: ${made.map((m) => `#${m}`).join(", ")} (${dir}/)`);
 			}
-			if (merged) {
-				await run("git", ["worktree", "remove", "--force", wt], o.dir);
-				await run("git", ["branch", "-D", branch], o.dir);
-				await quiet(run("git", ["push", "origin", "--delete", branch], o.dir));
-			}
-		} else merged = true;
-		if (merged && plan) {
-			await make(node, plan, body, o, run);
 			await release(o.repo, c, run);
 			return { issue: node.number, pr, outcome: "merged" };
 		}
