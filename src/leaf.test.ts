@@ -26,6 +26,11 @@ test("verdict는 보고서에서 처음 나온 판정을 읽는다", () => {
 	assert.equal(verdict("커밋 abc\n판정: PASS\n..."), "PASS");
 	assert.equal(verdict("판정: NEEDS_WORK\n나중에 PASS 가능"), "NEEDS_WORK");
 	assert.equal(verdict("판정 없음"), "NEEDS_WORK");
+	assert.equal(
+		verdict("형식(PASS / NEEDS_WORK)\n판정: NEEDS_WORK"),
+		"NEEDS_WORK",
+	);
+	assert.equal(verdict("**판정: PASS**"), "PASS");
 });
 
 test("PASS면 잎이 끝까지 간다: 고르기 → worktree → 구현 → PR → 평가 → rebase·CI·머지 → 닫기", async () => {

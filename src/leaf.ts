@@ -23,7 +23,7 @@ const EVALUATOR = fileURLToPath(
 );
 
 export function verdict(report: string): Result["verdict"] {
-	return report.match(/PASS|NEEDS_WORK/)?.[0] === "PASS"
+	return report.match(/판정:\s*(PASS|NEEDS_WORK)/)?.[1] === "PASS"
 		? "PASS"
 		: "NEEDS_WORK";
 }
