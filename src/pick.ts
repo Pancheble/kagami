@@ -36,7 +36,7 @@ export const isClaim = (body: string) => /^claim: \S+\s*$/.test(body);
 const taken = (t: Tree) =>
 	t.assignees.length > 0 || t.comments.some((c) => isClaim(c.body));
 
-// CLI 숫자 인자. 0 이상 정수만
+// CLI 숫자 인자. min 이상 정수만
 export function num(flag: string, v: string, min: number): number {
 	if (!/^\d+$/.test(v) || Number(v) < min)
 		throw new Error(`${flag}는 ${min} 이상의 정수여야 한다: "${v}"`);
