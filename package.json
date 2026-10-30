@@ -1,0 +1,19 @@
+{
+	"name": "kagami",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"typecheck": "tsc",
+		"lint": "biome ci .",
+		"test": "node --test",
+		"check": "npm run typecheck && npm run lint && npm test"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.6.4",
+		"@types/node": "^24.19.2",
+		"typescript": "^7.0.2"
+	}
+}
