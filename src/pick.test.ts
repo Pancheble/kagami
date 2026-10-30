@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Run } from "./leaf.ts";
-import { claim, overlaps, ready, release } from "./pick.ts";
+import { claim, num, overlaps, ready, release } from "./pick.ts";
 import type { Tree } from "./tree.ts";
 
 const node = (number: number, children: Tree[], replan = false): Tree => ({
@@ -14,6 +14,7 @@ const node = (number: number, children: Tree[], replan = false): Tree => ({
 	replan,
 	stuck: 0,
 	scope: [],
+	comments: [],
 	children,
 });
 const leaf = (number: number, o: Partial<Tree> = {}): Tree => ({
@@ -96,6 +97,34 @@ test("이미 담당이 걸린 열린 잎과 범위가 겹치면 고르지 않는
 		leaf(31, { scope: ["src/11.ts"], state: "closed", assignees: ["bot"] }),
 	]);
 	assert.deepEqual(nums(ready(t, 2, 0)), [11]);
+});
+
+test("claim 댓글만 달리고 assignee가 아직 없는 잎도 담당이 걸린 것으로 본다", () => {
+	const claimed = [
+		{ id: 1, body: "claim: bot/worker-1", createdAt: "2026-10-30T00:00:00Z" },
+	];
+	const chat = [
+		{ id: 2, body: "claim은 나중에", createdAt: "2026-10-30T00:00:00Z" },
+	];
+	const t = node(1, [
+		node(2, [
+			leaf(10, { scope: ["src/x/"] }),
+			leaf(11),
+			leaf(12, { comments: chat }),
+		]),
+		leaf(30, { scope: ["src/x/y.ts"], comments: claimed }),
+		leaf(31, { comments: claimed }),
+	]);
+	assert.deepEqual(nums(ready(t, 2, 0)), [11, 12]);
+	assert.deepEqual(nums(ready(t, 1, 0)), [11, 12]);
+});
+
+test("--workers, --dial 같은 숫자 인자는 정수인지 검사한다", () => {
+	assert.equal(num("--workers", "3", 1), 3);
+	assert.equal(num("--dial", "0", 0), 0);
+	for (const bad of ["", "abc", "1.5", "-1", "2x"])
+		assert.throws(() => num("--dial", bad, 0), /--dial/, bad);
+	assert.throws(() => num("--workers", "0", 1), /--workers/);
 });
 
 // claim 댓글: 가장 먼저 달린 claim이 이긴다. 같은 시각이면 댓글 id가 작은 쪽
