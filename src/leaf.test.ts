@@ -1911,3 +1911,23 @@ test("8 보고서 세션은 큰 가지 아래 잎 PR의 재계획 칸을 AI가 �
 		/# 재계획 기록[\s\S]*- #6: 재계획 칸 \(PR #20\): 끝 기준이 파일 하나라 모듈로 나눴다/,
 	);
 });
+
+test("쪼개기 세션도 노드 이슈에 덧붙은 바뀐 약속을 받는다", async () => {
+	const { splits, run } = fake({
+		root: {
+			...bare,
+			comments: [
+				{
+					id: 49,
+					created_at: now(),
+					body: "바뀐 약속 (#6, PR #20): add에 선택 인자 c를 더했다",
+				},
+			],
+		},
+	});
+	await runLeaves(splitOpts(), run);
+	assert.match(
+		splits[0],
+		/# 바뀐 약속\n\n바뀐 약속 \(#6, PR #20\): add에 선택 인자 c를 더했다/,
+	);
+});
