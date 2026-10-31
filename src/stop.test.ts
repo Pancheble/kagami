@@ -4,7 +4,8 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { steer, steerFile, steerHook } from "./steer.ts";
+import { implement } from "./session.ts";
+import { steer, steerFile } from "./steer.ts";
 import { stop, stopped } from "./stop.ts";
 
 const ctl = () => mkdtempSync(join(tmpdir(), "ctl-"));
@@ -41,7 +42,7 @@ const fire = (args: string[]) => {
 
 test("방향 수정 hook: 파일에 글이 있으면 한 번 막고 그 글을 세션에 보여 준 뒤 비운다. 비었으면 아무것도 안 한다", () => {
 	const d = ctl();
-	const args = steerHook(d, "o/r", 7);
+	const args = implement({ ctl: d, repo: "o/r" }, 7);
 	assert.equal(fire(args), "");
 	steer(d, "o/r", 7, "이름을 greet로 바꿔");
 	const out = JSON.parse(fire(args));
@@ -49,4 +50,18 @@ test("방향 수정 hook: 파일에 글이 있으면 한 번 막고 그 글을 �
 	assert.match(out.reason, /OPERATOR STEERING: 이름을 greet로 바꿔/);
 	assert.equal(readFileSync(steerFile(d, "o/r", 7), "utf8"), "");
 	assert.equal(fire(args), "");
+});
+
+test("구현 세션 플래그는 session.ts 한 곳에서: 권한 플래그 그대로에 그 잎의 방향 수정 hook만 더한다", () => {
+	const d = ctl();
+	const args = implement({ ctl: d, repo: "o/r" }, 7);
+	assert.deepEqual(args.slice(0, 4), [
+		"--permission-mode",
+		"acceptEdits",
+		"--allowedTools",
+		"Bash(npm test),Bash(npm run *),Bash(node *),Bash(git status),Bash(git diff *)",
+	]);
+	assert.equal(args[4], "--settings");
+	assert.ok(args[5].includes(steerFile(d, "o/r", 7)));
+	assert.equal(args.length, 6);
 });

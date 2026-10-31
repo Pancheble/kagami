@@ -26,9 +26,8 @@ import {
 	unsplit,
 } from "./pick.ts";
 import { replan } from "./replan.ts";
-import { evaluate, harness, IMPLEMENT, session } from "./session.ts";
+import { evaluate, harness, implement, session } from "./session.ts";
 import { split } from "./split.ts";
-import { steerHook } from "./steer.ts";
 import { CTL, stopped } from "./stop.ts";
 import { readTree, type Tree } from "./tree.ts";
 
@@ -240,8 +239,7 @@ async function attempt(
 					[
 						"-p",
 						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
-						...IMPLEMENT,
-						...steerHook(o.ctl, o.repo, i.number),
+						...implement(o, i.number),
 						"--output-format",
 						"json",
 						"--json-schema",
