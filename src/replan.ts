@@ -10,6 +10,7 @@ import {
 	firstLine,
 	giveUp,
 	type Opts,
+	PROMISED,
 	prompt,
 	type Result,
 	type Run,
@@ -110,7 +111,7 @@ const view = (n: number, o: Opts, run: Run) =>
 		".body",
 	]);
 
-// 재계획 세션이 읽을 것: 노드 이슈, 자식 상태, 열린 자식의 티켓과 막힌 이유, 자식 PR의 결정과 재계획 칸.
+// 재계획 세션이 읽을 것: 노드 이슈와 바뀐 약속, 자식 상태, 열린 자식의 티켓과 막힌 이유, 자식 PR의 결정과 재계획 칸.
 // 형제 PR을 몰아 읽는 건 이때뿐이다
 // ponytail: PR은 최근 200개만 본다(0단계.md T6 남은 일)
 async function context(node: Tree, ticket: string, o: Opts, run: Run) {
@@ -136,7 +137,18 @@ async function context(node: Tree, ticket: string, o: Opts, run: Run) {
 		.slice(last + 1)
 		.map((c) => c.body)
 		.filter((b) => b.startsWith("재계획 신호"));
-	const out = [ticket, "# 재계획 신호", ...signals, "# 자식 상태"];
+	// 머지된 잎이 덧붙인 바뀐 약속(넓히는 변경)
+	const promised = node.comments
+		.map((c) => c.body)
+		.filter((b) => b.startsWith(PROMISED));
+	const out = [
+		ticket,
+		"# 바뀐 약속",
+		...(promised.length ? promised : ["없음"]),
+		"# 재계획 신호",
+		...signals,
+		"# 자식 상태",
+	];
 	for (const c of node.children) {
 		const tag =
 			c.state === "open" ? `열림${c.stuck ? `, 막힘 ${c.stuck}` : ""}` : "닫힘";

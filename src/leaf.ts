@@ -55,6 +55,31 @@ export type Result = {
 	outcome: "merged" | "stuck" | "human" | "up" | "closed" | "replan";
 };
 
+// 구현자가 구조화 출력으로 채우는 PR 칸. 빈 문자열은 "없음"
+export type Filled = {
+	decisions: string; // 결정과 이유
+	promises: string; // 바꾼 약속(넓히는 변경만)
+	replan: string; // 하다가 바꾼 계획
+	next: string; // 다음 사람에게
+};
+const FILLED = JSON.stringify({
+	type: "object",
+	additionalProperties: false,
+	required: ["decisions", "promises", "replan", "next"],
+	properties: {
+		decisions: { type: "string", minLength: 1 },
+		promises: { type: "string" },
+		replan: { type: "string" },
+		next: { type: "string" },
+	},
+});
+const or = (s: string) => s.trim() || "없음";
+// PR 템플릿(흐름의 "진척도와 기록"). 재계획 세션은 Closes #잎으로 PR을 찾아 결정과 재계획 칸을 읽는다
+export const prBody = (n: number, parent: Tree | undefined, f: Filled) =>
+	`## 의도\n\n- 티켓: Closes #${n}\n- 부모 목표: ${parent ? `#${parent.number} ${parent.title}` : "없음"}\n\n## 결정과 이유\n\n${or(f.decisions)}\n\n## 바꾼 약속\n\n${or(f.promises)}\n\n## 재계획\n\n${or(f.replan)}\n\n## 다음 사람에게\n\n${or(f.next)}\n`;
+// 머지된 잎이 부모 이슈에 덧붙이는 댓글의 머리. 본문을 고치지 않으니 여러 잎이 동시에 써도 부딪히지 않는다
+export const PROMISED = "바뀐 약속 (";
+
 export const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
 export const STUCKS = 3; // 막힘이 이만큼이면 부모에 재계획 신호
 
@@ -170,6 +195,8 @@ async function attempt(
 	const n = String(i.number);
 	const branch = branchOf(i);
 	const wt = worktreeOf(i, o);
+	const parent = path(tree, i.number)?.at(-2);
+	let filled: Filled | undefined;
 	let pr = 0;
 	let fails = 0;
 	let why = "";
@@ -204,16 +231,24 @@ async function attempt(
 		let fix: string | undefined = "";
 		while (fails < FAILS) {
 			if (fix !== undefined) {
-				await session(
+				const out = await session(
 					o,
 					[
 						"-p",
 						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
 						...IMPLEMENT,
+						"--output-format",
+						"json",
+						"--json-schema",
+						FILLED,
 					],
 					wt,
 					run,
 				);
+				filled = JSON.parse(out).structured_output as Filled | undefined;
+				if (!filled)
+					throw new Error(`구현 세션이 PR 칸을 돌려주지 않았다\n${out}`);
+				const prText = prBody(i.number, parent, filled);
 				await run("git", ["add", "-A"], wt);
 				await run(
 					"git",
@@ -240,12 +275,17 @@ async function attempt(
 							"--title",
 							i.title,
 							"--body",
-							`Closes #${n}`,
+							prText,
 						],
 						wt,
 					);
 					pr = Number(url.trim().split("/").pop());
-				}
+				} else
+					await run(
+						"gh",
+						["pr", "edit", String(pr), "-R", o.repo, "--body", prText],
+						wt,
+					);
 				const report = await evaluate(
 					prompt("evaluate", { ticket }),
 					wt,
@@ -268,6 +308,24 @@ async function attempt(
 			}
 			const failed = await merge(pr, wt, o, run, gate);
 			if (!failed) {
+				// 머지된 PR의 칸을 이슈로 옮긴다: 바꾼 약속은 부모(다음 재계획이 읽는다), 재계획은 잎(8 보고서가 읽는다)
+				const say = (k: number, text: string) =>
+					run("gh", [
+						"issue",
+						"comment",
+						String(k),
+						"-R",
+						o.repo,
+						"--body",
+						text,
+					]);
+				if (parent && filled?.promises.trim())
+					await say(
+						parent.number,
+						`${PROMISED}#${n}, PR #${pr}): ${filled.promises.trim()}`,
+					);
+				if (filled?.replan.trim())
+					await say(i.number, `재계획 칸 (PR #${pr}): ${filled.replan.trim()}`);
 				await run("gh", ["issue", "close", n, "-R", o.repo], o.dir);
 				await run("git", ["worktree", "remove", "--force", wt], o.dir);
 				await run("git", ["branch", "-D", branch], o.dir);
