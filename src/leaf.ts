@@ -1,6 +1,6 @@
 // 잎 루프 세 겹: 평가 FAIL 3번 → 막힘(claim 놓고 다음 고르기에서 새 세션), 막힘 3번 → 부모에 재계획 신호.
 // 잎은 pick.ts로 고르고, 머지 실패(rebase 충돌·CI·fast-forward 거절)도 FAIL로 센다.
-// 실행: node src/leaf.ts --repo owner/name --dir <로컬 클론> --root <뿌리>
+// 실행: node src/leaf.ts --harness <봇 계정> --repo owner/name --dir <로컬 클론> --root <뿌리>
 //       [--focus <집중 노드>] [--dial <층 수>] [--workers 1] [--ttl <시간>] [--claude <claude 경로>]
 // 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
 // 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
@@ -23,7 +23,7 @@ import {
 	unsplit,
 } from "./pick.ts";
 import { replan } from "./replan.ts";
-import { evaluate, IMPLEMENT, session } from "./session.ts";
+import { evaluate, harness, IMPLEMENT, session } from "./session.ts";
 import { split } from "./split.ts";
 import { readTree, type Tree } from "./tree.ts";
 
@@ -41,7 +41,7 @@ export type Opts = {
 	root: number; // 뿌리 이슈
 	focus: number; // 집중 노드
 	dial: number; // 범위 다이얼
-	account: string; // claim에 적는 gh 계정
+	account: string; // 하네스 계정(봇, 소문자). claim에 적고, /승인에서 뺀다
 	ttl: number; // 시간. 이보다 오래된 claim은 시도가 끊긴 것으로 본다
 	poll?: number; // ms. 위험 경로 대기에서 /승인을 다시 볼 간격(기본 1분)
 };
@@ -451,6 +451,7 @@ if (import.meta.main) {
 			workers: { type: "string", default: "1" },
 			ttl: { type: "string", default: "6" },
 			claude: { type: "string", default: process.env.CLAUDE_BIN ?? "claude" },
+			harness: { type: "string" },
 		},
 	});
 	if (!values.repo || !values.dir || !values.root)
@@ -466,10 +467,8 @@ if (import.meta.main) {
 		dial: values.dial === undefined ? Infinity : num("--dial", values.dial, 0),
 		ttl: num("--ttl", values.ttl, 1),
 	};
+	const account = await harness(values.harness, sh);
 	process.on("exit", lockClone(o.dir));
-	const account = (await sh("gh", ["api", "user", "--jq", ".login"]))
-		.trim()
-		.toLowerCase();
 	const results = await runLeaves({ ...o, account }, sh);
 	console.log(JSON.stringify(results, null, 2));
 	if (results.some((r) => r.outcome === "stuck" || r.outcome === "human"))

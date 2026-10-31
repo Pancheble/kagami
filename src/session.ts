@@ -1,14 +1,59 @@
-// 세션 권한은 모두 여기: claude -p 세션을 띄우는 곳(인증 없는 환경)과 역할마다 거는 CLI 플래그.
+// 세션 권한은 모두 여기: 하네스 자신의 열쇠(봇 계정), claude -p 세션을 띄우는 곳(인증 없는 환경)과 역할마다 거는 CLI 플래그.
 // 위험 경로다(CLAUDE.md의 Risk paths). 역할 프롬프트는 prompts/*.md
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 import type { Opts, Run } from "./leaf.ts";
 
 const EVALUATOR = fileURLToPath(
 	new URL("../.claude/agents/evaluator.md", import.meta.url),
 );
+const ENV = fileURLToPath(new URL("../.env", import.meta.url));
+
+// 하네스의 열쇠: GitHub에 쓰는 것(gh, git push)은 모두 봇 계정 토큰으로 한다. 사람 계정이 단 /승인만 세려면
+// 하네스와 사람이 다른 계정이어야 한다(자기 채점 금지). 토큰은 하네스 저장소 .env의 KAGAMI_BOT_TOKEN.
+// 하네스 프로세스 환경(env)에만 건다: gh는 GH_TOKEN, git은 도우미 목록(키체인의 사람 자격 증명)을 비우고
+// gh를 도우미로, ssh 원격(ssh 에이전트의 사람 키)은 https로. 세션에는 noKey가 이걸 다 뺀다.
+// 토큰이 없거나 토큰의 계정이 login과 다르면 GitHub에 쓰기 전에 멈춘다. 돌려주는 건 소문자 계정
+export async function harness(
+	login: string | undefined,
+	run: Run,
+	env: NodeJS.ProcessEnv = process.env,
+	file = ENV,
+): Promise<string> {
+	if (!login) throw new Error("--harness <봇 계정>이 필요하다");
+	const token =
+		env.KAGAMI_BOT_TOKEN ??
+		(existsSync(file)
+			? parseEnv(readFileSync(file, "utf8")).KAGAMI_BOT_TOKEN
+			: undefined);
+	if (!token)
+		throw new Error(
+			`KAGAMI_BOT_TOKEN이 없다: ${file}에 봇 계정(${login}) 토큰을 넣어라`,
+		);
+	Object.assign(env, {
+		GH_TOKEN: token,
+		GIT_CONFIG_COUNT: "4",
+		GIT_CONFIG_KEY_0: "credential.helper",
+		GIT_CONFIG_VALUE_0: "",
+		GIT_CONFIG_KEY_1: "credential.helper",
+		GIT_CONFIG_VALUE_1: "!gh auth git-credential",
+		GIT_CONFIG_KEY_2: "url.https://github.com/.insteadOf",
+		GIT_CONFIG_VALUE_2: "git@github.com:",
+		GIT_CONFIG_KEY_3: "url.https://github.com/.insteadOf",
+		GIT_CONFIG_VALUE_3: "ssh://git@github.com/",
+	});
+	const who = (
+		await run("gh", ["api", "user", "--jq", ".login"], undefined, env)
+	).trim();
+	if (who.toLowerCase() !== login.toLowerCase())
+		throw new Error(
+			`하네스 계정이 다르다: --harness ${login}인데 토큰의 계정은 ${who}`,
+		);
+	return who.toLowerCase();
+}
 
 // 열쇠를 안 준다: 세션 환경에서 GitHub·git 인증을 뺀다. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
 // 그래서 허용된 node -e로 gh나 git push를 불러도 인증이 없어 실패한다. claude 자신의 로그인은 그대로다.
@@ -16,6 +61,7 @@ const EVALUATOR = fileURLToPath(
 export function noKey(): NodeJS.ProcessEnv {
 	const env = { ...process.env };
 	for (const k of [
+		"KAGAMI_BOT_TOKEN",
 		"GH_TOKEN",
 		"GITHUB_TOKEN",
 		"GH_ENTERPRISE_TOKEN",
