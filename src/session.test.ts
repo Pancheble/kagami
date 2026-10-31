@@ -8,12 +8,12 @@ import { type Run, sh } from "./leaf.ts";
 import { harness, noKey } from "./session.ts";
 
 const NONE = join(tmpdir(), "kagami-no-env-file");
-// gh api user가 이 계정을 돌려준다. 부른 명령을 적는다
+// gh api user가 이 계정(id 42)을 돌려준다. 부른 명령을 적는다
 const gh = (login: string) => {
 	const calls: string[] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args].join(" "));
-		return `${login}\n`;
+		return `42 ${login}\n`;
 	};
 	return { calls, run };
 };
@@ -42,7 +42,7 @@ test("토큰의 계정이 --harness와 다르면 쓰기 전에 멈춘다", async
 		harness("pancheble-bot", run, { KAGAMI_BOT_TOKEN: "t" }, NONE),
 		/pancheble-bot.*Pancheble/,
 	);
-	assert.deepEqual(calls, ["gh api user --jq .login"]);
+	assert.deepEqual(calls, ['gh api user --jq "\\(.id) \\(.login)"']);
 });
 
 test("맞으면 소문자 계정을 돌려주고, 하네스 환경의 gh와 git이 봇 토큰을 쓴다", async () => {
@@ -97,6 +97,30 @@ test("세션 환경에는 봇 토큰과 하네스의 git 자격 증명 설정이
 		assert.equal(env.GIT_CONFIG_COUNT, "1");
 		assert.equal(env.GIT_CONFIG_VALUE_0, "");
 		assert.ok(!Object.values(env).includes("봇토큰"));
+	} finally {
+		for (const k of Object.keys(process.env))
+			if (!(k in saved)) delete process.env[k];
+		Object.assign(process.env, saved);
+	}
+});
+
+test("하네스가 만드는 커밋은 작성자·커미터가 봇 계정이다(세션 환경에도 남는다)", async () => {
+	const env: NodeJS.ProcessEnv = { ...process.env, KAGAMI_BOT_TOKEN: "t" };
+	await harness("pancheble-bot", gh("Pancheble-bot").run, env, NONE);
+	const dir = mkdtempSync(join(tmpdir(), "who-"));
+	await sh("git", ["init", "-q"], dir, env);
+	await sh("git", ["commit", "-q", "--allow-empty", "-m", "x"], dir, env);
+	const who = "Pancheble-bot <42+Pancheble-bot@users.noreply.github.com>";
+	assert.equal(
+		(
+			await sh("git", ["log", "--format=%an <%ae> / %cn <%ce>"], dir, env)
+		).trim(),
+		`${who} / ${who}`,
+	);
+	const saved = { ...process.env };
+	try {
+		Object.assign(process.env, env);
+		assert.equal(noKey().GIT_AUTHOR_NAME, "Pancheble-bot");
 	} finally {
 		for (const k of Object.keys(process.env))
 			if (!(k in saved)) delete process.env[k];

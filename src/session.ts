@@ -45,13 +45,29 @@ export async function harness(
 		GIT_CONFIG_KEY_3: "url.https://github.com/.insteadOf",
 		GIT_CONFIG_VALUE_3: "ssh://git@github.com/",
 	});
-	const who = (
-		await run("gh", ["api", "user", "--jq", ".login"], undefined, env)
-	).trim();
+	const [id, who = ""] = (
+		await run(
+			"gh",
+			["api", "user", "--jq", '"\\(.id) \\(.login)"'],
+			undefined,
+			env,
+		)
+	)
+		.trim()
+		.split(" ");
 	if (who.toLowerCase() !== login.toLowerCase())
 		throw new Error(
 			`하네스 계정이 다르다: --harness ${login}인데 토큰의 계정은 ${who}`,
 		);
+	// 하네스가 만드는 커밋(잎 커밋, rebase)도 봇 이름으로: 8 보고서에서 AI가 바꾼 곳을 가려 본다.
+	// 인증이 아니라 noKey는 이건 남긴다. 이메일은 GitHub noreply라 커밋이 봇 계정에 이어진다
+	const me = `${id}+${who}@users.noreply.github.com`;
+	Object.assign(env, {
+		GIT_AUTHOR_NAME: who,
+		GIT_AUTHOR_EMAIL: me,
+		GIT_COMMITTER_NAME: who,
+		GIT_COMMITTER_EMAIL: me,
+	});
 	return who.toLowerCase();
 }
 
