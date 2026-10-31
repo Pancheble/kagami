@@ -128,7 +128,15 @@ async function context(node: Tree, ticket: string, o: Opts, run: Run) {
 			"number,body",
 		]),
 	);
-	const out = [ticket, "# 자식 상태"];
+	// 지난 재계획 뒤에 달린 신호만: 막힘 3번, 인수 테스트 빨강, 8의 /다르게, 아래에서 올라옴
+	const last = node.comments.findLastIndex((c) =>
+		c.body.startsWith("재계획 ("),
+	);
+	const signals = node.comments
+		.slice(last + 1)
+		.map((c) => c.body)
+		.filter((b) => b.startsWith("재계획 신호"));
+	const out = [ticket, "# 재계획 신호", ...signals, "# 자식 상태"];
 	for (const c of node.children) {
 		const tag =
 			c.state === "open" ? `열림${c.stuck ? `, 막힘 ${c.stuck}` : ""}` : "닫힘";

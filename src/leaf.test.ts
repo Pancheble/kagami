@@ -10,8 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
+import { closable } from "./close.ts";
 import { lockClone, type Run, runLeaves, sh, verdict } from "./leaf.ts";
 import { noKey } from "./session.ts";
+import type { Tree } from "./tree.ts";
 
 type Comment = {
 	id: number;
@@ -116,6 +118,7 @@ function fake(
 	const status = [...(o.status ?? [])];
 	const splits: string[] = []; // 쪼개기 세션 프롬프트
 	const evals: string[] = []; // 평가자 프롬프트
+	const reports: string[] = []; // 8 보고서 세션 프롬프트
 	const calls: string[] = [];
 	const prompts: string[] = [];
 	let id = 1000;
@@ -169,7 +172,9 @@ function fake(
 			issues[n] = {
 				title: at("-f").slice(6),
 				body: args[args.indexOf("-f", args.indexOf("-f") + 1) + 1].slice(5),
-				labels: ["leaf"],
+				labels: args
+					.filter((a) => a.startsWith("labels[]="))
+					.map((a) => a.slice(9)),
 				assignees: [],
 				subIssues: [],
 				comments: [],
@@ -252,6 +257,19 @@ function fake(
 			issues[Number(args[2])].state = "CLOSED";
 			return "";
 		}
+		if (line.startsWith("gh issue reopen")) {
+			issues[Number(args[2])].state = "OPEN";
+			return "";
+		}
+		if (line.startsWith("gh issue list"))
+			return JSON.stringify(
+				Object.entries(issues)
+					.filter(
+						([, i]) => i.state === "OPEN" && i.labels.includes(at("--label")),
+					)
+					.map(([n, i]) => ({ number: Number(n), body: i.body })),
+			);
+		if (line.startsWith("git rev-parse origin/dev")) return "abc123\n";
 		if (line.startsWith("gh pr list")) return JSON.stringify(o.prs ?? []);
 		if (line.startsWith("git diff --name-status")) return status.shift() ?? "";
 		if (line.startsWith("git show") && o.show?.[args[1]] !== undefined)
@@ -286,6 +304,10 @@ function fake(
 			evals.push(args[1]);
 			return verdicts.shift() ?? "판정: PASS";
 		}
+		if (cmd === "claude" && args.includes("--tools")) {
+			reports.push(args[1]);
+			return "## 되는 것\n\n- greet 확인함\n";
+		}
 		if (cmd === "claude" && args.includes("--json-schema")) {
 			splits.push(args[1]);
 			return JSON.stringify({ structured_output: plans.shift() ?? plan() });
@@ -319,7 +341,17 @@ function fake(
 			throw new Error("git push 실패\n! [rejected] (fetch first)");
 		return "";
 	};
-	return { calls, prompts, splits, evals, run, issues, git, prComments };
+	return {
+		calls,
+		prompts,
+		splits,
+		evals,
+		reports,
+		run,
+		issues,
+		git,
+		prComments,
+	};
 }
 
 // 쪼개기 세션의 기본 답: 잎 둘, 둘째는 첫째를 기다린다
@@ -604,12 +636,12 @@ test("일꾼이 여럿이면 잎마다 시도하고, 같은 클론의 git 명령
 	assert.equal(git.most, 1);
 });
 
-test("고를 잎이 없으면 트리만 읽는다", async () => {
+test("고를 잎이 없으면 트리와 8 보고서 이슈만 읽는다", async () => {
 	const { calls, run } = fake({ leaf: { state: "CLOSED" } });
 	assert.deepEqual(await runLeaves(opts, run), []);
 	assert.deepEqual(
 		calls.map((c) => c.split(" ").slice(0, 3).join(" ")),
-		["gh api graphql", "gh api graphql"],
+		["gh api graphql", "gh api graphql", "gh issue list"],
 	);
 });
 
@@ -1429,4 +1461,263 @@ test("여러 노드의 계약을 고쳤으면 노드마다 재계획 신호", as
 	await runLeaves(opts, run);
 	assert.ok(issues[1].labels.includes("replan"));
 	assert.ok(issues[5].labels.includes("replan"));
+});
+
+// ── 부모 닫기와 8 (T8) ──
+// 뿌리 #1 아래 큰 가지 #5, 그 아래 닫힌 잎 #6. dev의 contracts/5/에 인수 테스트
+const branch = (o: { five?: Partial<Issue>; green?: boolean } = {}) => ({
+	root: { subIssues: [5], body: '## 성공 기준\n\n- greet("kim")이 "hi, kim"' },
+	extra: {
+		5: {
+			title: "인사 가지",
+			body: "## 목표\n\ngreet",
+			subIssues: [6],
+			...o.five,
+		},
+		6: { labels: ["leaf"], state: "CLOSED" as const },
+	},
+	trees: {
+		"origin/dev": [
+			"contracts/5/greet.accept.js",
+			"contracts/5/greet.contract.js",
+		],
+	},
+	reds:
+		o.green === false
+			? [[{ name: "greet", ok: false, error: "AssertionError: hi, lee" }]]
+			: [[{ name: "greet", ok: true, error: "" }]],
+});
+const human = (body: string, user = "kim") => ({
+	id: 9000,
+	created_at: now(),
+	body,
+	user,
+	type: "User",
+	assoc: "OWNER",
+});
+
+test("자식이 다 닫히고 dev의 인수 테스트가 초록이면 노드를 닫고, 부모 아래에 플래그 지우기 잎을 만든다", async () => {
+	const { calls, run, issues } = fake(branch());
+	const results = await runLeaves(splitOpts(), run);
+	assert.deepEqual(results[0], { issue: 5, pr: 0, outcome: "closed" });
+	inOrder(calls, [
+		"gh api repos/o/r/issues/5/comments -X POST -f body=claim: pancheble/worker-1",
+		"git fetch origin dev",
+		"git rev-parse origin/dev",
+		"git worktree add --detach",
+		"git ls-tree -r --name-only origin/dev -- contracts/5",
+		`${process.execPath} --test`,
+		"gh issue comment 5 -R o/r --body 닫음: 자식이 다 닫혔고 인수 테스트가 초록이다 (dev abc123)",
+		"gh issue close 5",
+		"gh api repos/o/r/issues -X POST -f title=플래그 지우기: 인사 가지",
+		"gh api repos/o/r/issues/1/sub_issues -X POST",
+		"gh api -X DELETE repos/o/r/issues/comments/", // claim 놓기
+	]);
+	assert.equal(issues[5].state, "CLOSED");
+	// 닫을 때는 인수 테스트만 돌린다
+	const closing = calls.slice(0, calls.indexOf("gh issue close 5 -R o/r"));
+	assert.ok(closing.some((c) => c.includes("greet.accept.js")));
+	assert.ok(!closing.some((c) => c.includes("greet.contract.js")));
+	const flag = Object.values(issues).find((i) =>
+		i.title.startsWith("플래그 지우기"),
+	);
+	assert.deepEqual(flag?.labels, ["leaf"]);
+	assert.match(flag?.body ?? "", /#5/);
+	assert.ok(issues[1].subIssues.includes(9));
+});
+
+test("큰 가지가 닫히면 8 보고서 세션(쓰기 도구 없음)이 dev에서 돌고, 보고서 이슈가 생기고, 뿌리에 써 볼 차례를 알린다", async () => {
+	const { calls, run, issues, reports } = fake({
+		...branch({
+			five: {
+				comments: [
+					{
+						id: 40,
+						created_at: now(),
+						body: "재계획 (resplit): 끝 기준을 고쳤다 — 고쳐 씀 #6",
+					},
+					{ id: 41, created_at: now(), body: "claim 아닌 잡담" },
+				],
+			},
+		}),
+	});
+	await runLeaves(splitOpts(), run);
+	const session =
+		calls.find((c) => c.startsWith("claude -p 너는 8 보고서")) ?? "";
+	assert.match(session, /--tools Read,Grep,Glob,Bash/);
+	assert.ok(!/Write|Edit|acceptEdits|Bash\(gh/.test(session), session);
+	const p = reports[0];
+	assert.match(p, /greet\("kim"\)/); // 뿌리 성공 기준
+	assert.match(p, /#5 인사 가지/);
+	assert.match(p, /재계획 \(resplit\): 끝 기준을 고쳤다/); // AI가 방향을 바꾼 곳
+	assert.ok(!p.includes("잡담"));
+	assert.match(p, /#9 플래그 지우기: 인사 가지/);
+	const report = Object.entries(issues).find(([, i]) =>
+		i.labels.includes("report"),
+	);
+	assert.ok(report, "보고서 이슈가 없다");
+	const [rn, r] = report;
+	assert.equal(r.title, "8 보고서: 인사 가지");
+	assert.match(r.body, /## 되는 것/);
+	assert.match(r.body, /^- 큰 가지: #5$/m);
+	assert.match(r.body, /^- 뿌리: #1$/m);
+	assert.match(r.body, /^- dev: abc123$/m);
+	assert.match(r.body, /\/맞다/);
+	assert.equal(r.state, "OPEN");
+	assert.ok(!issues[1].subIssues.includes(Number(rn))); // 트리에 들어가지 않는다
+	const note = issues[1].comments.at(-1)?.body ?? "";
+	assert.match(note, new RegExp(`^써 볼 차례: 큰 가지 #5.*#${rn}`));
+	// 보고서를 쓴 뒤 dev worktree를 치운다
+	inOrder(calls, ["claude -p 너는 8 보고서", "git worktree remove --force /"]);
+});
+
+test("큰 가지가 아닌 노드가 닫히면 보고서는 없고 플래그 지우기 잎만 생긴다", async () => {
+	const b = branch();
+	const { run, issues, reports } = fake({
+		...b,
+		extra: { ...b.extra, 4: { subIssues: [5] } },
+		root: { ...b.root, subIssues: [4] },
+	});
+	await runLeaves(splitOpts(), run);
+	assert.equal(issues[5].state, "CLOSED");
+	assert.equal(reports.length, 0);
+	const flag = Object.entries(issues).find(([, i]) =>
+		i.title.startsWith("플래그 지우기"),
+	);
+	assert.ok(flag && issues[4].subIssues.includes(Number(flag[0])));
+	assert.ok(!Object.values(issues).some((i) => i.labels.includes("report")));
+});
+
+test("자식은 다 닫혔는데 인수 테스트가 빨강이면 닫지 않고 재계획 신호. 재계획 세션은 그 이유를 받는다", async () => {
+	const { run, issues, splits } = fake({
+		...branch({ green: false }),
+		plans: [{}],
+	});
+	const results = await runLeaves(splitOpts(), run);
+	assert.deepEqual(results[0], { issue: 5, pr: 0, outcome: "replan" });
+	assert.equal(issues[5].state, "OPEN");
+	assert.ok(issues[5].labels.includes("replan"));
+	const sig = issues[5].comments.find((c) => c.body.startsWith("재계획 신호"));
+	assert.match(
+		sig?.body ?? "",
+		/자식이 다 닫혔는데 인수 테스트가 초록이 아니다 \(dev abc123\)/,
+	);
+	assert.match(sig?.body ?? "", /hi, lee/);
+	assert.ok(
+		!Object.values(issues).some((i) => i.title.startsWith("플래그 지우기")),
+	);
+	// 같은 돌기에서 재계획이 이어지고, 세션은 신호의 이유를 받는다
+	assert.match(splits[0], /# 재계획 신호[\s\S]*인수 테스트가 초록이 아니다/);
+});
+
+test("인수 테스트가 없으면 빨강과 같은 길", async () => {
+	const { run, issues } = fake({ ...branch(), trees: {}, plans: [{}] });
+	const [r] = await runLeaves(splitOpts(), run);
+	assert.deepEqual(r, { issue: 5, pr: 0, outcome: "replan" });
+	const sig = issues[5].comments.find((c) => c.body.startsWith("재계획 신호"));
+	assert.match(sig?.body ?? "", /인수 테스트\(\*\.accept\.\*\)가 없다/);
+});
+
+test("닫지 않는 노드: 열린 자식이 있다 · 재계획 중 · 사람 대기 · 자식이 없다 · 뿌리", () => {
+	const t = (n: number, o: Partial<Tree> = {}): Tree => ({
+		number: n,
+		title: "",
+		state: "open",
+		kind: "node",
+		assignees: [],
+		blockedBy: [],
+		replan: false,
+		human: false,
+		stuck: 0,
+		scope: [],
+		comments: [],
+		children: [],
+		...o,
+	});
+	const done = t(9, { kind: "leaf", state: "closed" });
+	const tree = t(1, {
+		children: [
+			t(2, { children: [done] }),
+			t(3, { children: [done, t(10, { kind: "leaf" })] }),
+			t(4, { children: [done], replan: true }),
+			t(5, { children: [done], human: true }),
+			t(6),
+			t(7, { children: [done], state: "closed" }),
+		],
+	});
+	assert.deepEqual(
+		closable(tree, 1).map((n) => n.number),
+		[2],
+	);
+	// 뿌리는 사람이 닫는다
+	assert.deepEqual(closable(t(1, { children: [done] }), 1), []);
+});
+
+// 열린 8 보고서 이슈 #20: 큰 가지 #5(닫힘), 뿌리 #1
+const answered = (...comments: Comment[]) =>
+	fake({
+		...branch({ five: { state: "CLOSED" } }),
+		extra: {
+			...branch().extra,
+			5: { title: "인사 가지", subIssues: [6], state: "CLOSED" },
+			20: {
+				title: "8 보고서: 인사 가지",
+				labels: ["report"],
+				body: "## 되는 것\n\n---\n\n- 큰 가지: #5\n- 뿌리: #1\n- dev: abc123\n",
+				comments,
+			},
+		},
+	});
+
+test("/맞다: 사람이 달면 보고서 이슈를 닫고 main으로 올릴 dev 커밋을 남긴다", async () => {
+	const { run, issues } = answered(human("/맞다"));
+	await runLeaves(opts, run);
+	assert.equal(issues[20].state, "CLOSED");
+	assert.match(
+		issues[20].comments.at(-1)?.body ?? "",
+		/^맞다 \(@kim\): main으로 올릴 것은 dev abc123/,
+	);
+	assert.equal(issues[5].state, "CLOSED");
+});
+
+test("/아니다: 뿌리에 이유를 남기고(기획 대화로) 보고서 이슈를 닫는다", async () => {
+	const { run, issues } = answered(
+		human("/아니다 로그인은 이메일이 아니라 아이디로"),
+	);
+	await runLeaves(opts, run);
+	assert.equal(issues[20].state, "CLOSED");
+	const note = issues[1].comments.at(-1)?.body ?? "";
+	assert.match(note, /^아니다 \(8 보고서 #20, @kim\): 뿌리를 고친다/);
+	assert.match(note, /아이디로/);
+});
+
+test("/다르게: 큰 가지를 다시 열고 재계획 신호(사람의 이유 포함)를 건 뒤 보고서 이슈를 닫는다", async () => {
+	const { run, issues, splits } = answered(human("/다르게\n인사는 존댓말로"));
+	await runLeaves(opts, run);
+	assert.equal(issues[20].state, "CLOSED");
+	assert.equal(issues[5].state, "OPEN");
+	assert.ok(issues[5].labels.includes("replan"));
+	const sig = issues[5].comments.find((c) => c.body.startsWith("재계획 신호"));
+	assert.match(
+		sig?.body ?? "",
+		/^재계획 신호: 8에서 다르게 \(8 보고서 #20, @kim\)/,
+	);
+	assert.match(sig?.body ?? "", /존댓말로/);
+	assert.match(splits[0], /존댓말로/); // 같은 돌기에서 재계획이 그 이유를 받는다
+});
+
+test("하네스 계정·bot·협업자 아닌 사람의 /맞다는 세지 않는다. 사람의 첫 답만 센다", async () => {
+	const { run, issues } = answered(
+		human("/맞다", "pancheble"),
+		{ ...human("/맞다", "ci[bot]"), type: "Bot", assoc: "NONE" },
+		{ ...human("/맞다", "stranger"), assoc: "NONE" },
+		human("좋아 보인다 /맞다"),
+	);
+	await runLeaves(opts, run);
+	assert.equal(issues[20].state, "OPEN");
+	assert.equal(issues[20].comments.length, 4);
+
+	const two = answered(human("/다르게 존댓말"), human("/맞다", "lee"));
+	await runLeaves(opts, two.run);
+	assert.equal(two.issues[5].state, "OPEN"); // 먼저 단 /다르게
 });
