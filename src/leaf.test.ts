@@ -1721,3 +1721,46 @@ test("하네스 계정·bot·협업자 아닌 사람의 /맞다는 세지 않는
 	await runLeaves(opts, two.run);
 	assert.equal(two.issues[5].state, "OPEN"); // 먼저 단 /다르게
 });
+
+test("/다시: 같은 dev 커밋에서 8 보고서 세션이 이전 보고서와 사람의 이유를 받아 새 보고서 이슈를 쓰고, 옛 이슈는 새 이슈를 가리키며 닫힌다. 노드와 트리는 그대로", async () => {
+	const { calls, run, issues, reports } = answered(
+		human("/다시 시나리오 3번이 끝 기준과 겹친다"),
+	);
+	await runLeaves(splitOpts(), run);
+	assert.equal(reports.length, 1);
+	assert.match(reports[0], /#5 인사 가지/);
+	assert.match(reports[0], /시나리오 3번이 끝 기준과 겹친다/);
+	assert.match(reports[0], /## 되는 것/); // 이전 보고서
+	assert.ok(!reports[0].includes("- dev: abc123")); // 이전 보고서의 꼬리는 빼고
+	inOrder(calls, [
+		"git fetch origin dev",
+		"git worktree add --detach",
+		"claude -p 너는 8 보고서",
+		"git worktree remove --force",
+	]);
+	assert.ok(
+		calls.some((c) => /^git worktree add --detach \S+ abc123$/.test(c)),
+	);
+	const made = Object.entries(issues).filter(
+		([n, i]) => n !== "20" && i.labels.includes("report"),
+	);
+	assert.equal(made.length, 1);
+	const [nn, n] = made[0];
+	assert.equal(n.title, "8 보고서: 인사 가지");
+	assert.equal(n.state, "OPEN");
+	assert.match(n.body, /^- 큰 가지: #5$/m);
+	assert.match(n.body, /^- 뿌리: #1$/m);
+	assert.match(n.body, /^- dev: abc123$/m);
+	assert.match(n.body, /^- 이전 보고서: #20$/m);
+	assert.match(n.body, /\/다시/);
+	assert.equal(issues[20].state, "CLOSED");
+	assert.match(
+		issues[20].comments.at(-1)?.body ?? "",
+		new RegExp(`^다시 \\(@kim\\): 새 보고서 #${nn}`),
+	);
+	// 노드와 트리는 건드리지 않는다
+	assert.equal(issues[5].state, "CLOSED");
+	assert.ok(!issues[5].labels.includes("replan"));
+	assert.ok(!issues[1].subIssues.includes(Number(nn)));
+	assert.ok(!issues[1].comments.some((c) => c.body.startsWith("써 볼 차례")));
+});
