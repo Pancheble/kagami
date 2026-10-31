@@ -18,6 +18,7 @@ import {
 	stuckNotes,
 } from "./leaf.ts";
 import { type Claim, path, release } from "./pick.ts";
+import { WRITE } from "./session.ts";
 import {
 	create,
 	land,
@@ -27,7 +28,6 @@ import {
 	TICKET,
 	type Ticket,
 	ticketBody,
-	WRITE,
 } from "./split.ts";
 import type { Tree } from "./tree.ts";
 
@@ -223,6 +223,8 @@ export async function replan(
 				);
 				return { report: r.report };
 			},
+			// 병렬 변경만 자기 노드의 옛 계약 테스트를 고치거나 지울 수 있다
+			own: (p) => (p.action === "expand" ? node.number : undefined),
 			ticket,
 			plan: `${dir}/replan.json`,
 			title: `재계획: ${node.title}`,

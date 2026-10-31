@@ -24,6 +24,10 @@
 - main을 옮기는 스크립트 (T11에서 생김)
 - `.claude/settings.json`, `.claude/agents/`
 - `.github/workflows/`
+- `prompts/` (세션 역할 프롬프트)
+- `src/session.ts` (세션 인증 제거와 역할마다 거는 권한 플래그)
+- `src/guard.ts` (dev로 가는 유일한 문: 순차 머지와 그 앞의 판정)
+- 이 목록 자체 (백틱으로 적은 경로만 사실 계산이 읽는다. 목록이 바뀌면 그것도 위험 경로로 센다)
 
 # Rules
 

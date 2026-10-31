@@ -2,32 +2,24 @@
 // 세션은 부모 이슈만 읽고 약속 스텁과 contracts/<노드>/ 테스트를 쓰고, 잎 티켓은 구조화 출력으로 돌려준다.
 // 하네스가 잎 조건과 처음엔 빨강을 계산하고, 평가자가 약속을 대조하면 순차 머지한 뒤 잎 이슈를 만든다.
 // 쪼개기 결과는 contracts/<노드>/leaves.json으로 같이 머지한다
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readFileSync,
-	writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Gate, merge, results, TESTS } from "./guard.ts";
 import {
 	branchOf,
-	evaluate,
 	FAILS,
 	firstLine,
 	giveUp,
-	merge,
 	type Opts,
 	prompt,
 	quiet,
 	type Result,
 	type Run,
-	session,
 	verdict,
 	worktreeOf,
 } from "./leaf.ts";
 import { type Claim, release } from "./pick.ts";
+import { evaluate, session, WRITE } from "./session.ts";
 import type { Tree } from "./tree.ts";
 
 export type Ticket = {
@@ -39,14 +31,6 @@ export type Ticket = {
 	waitFor: number[]; // 먼저 닫혀야 하는 잎(이 목록의 번호)
 };
 export type Plan = { asIs: boolean; leaves: Ticket[] }; // asIs: 노드가 그대로 잎
-
-// 노드 세션(쪼개기·재계획)의 권한: worktree에 쓰고 테스트를 돌린다. gh는 없다. 읽을 것은 프롬프트로 준다
-export const WRITE = [
-	"--permission-mode",
-	"acceptEdits",
-	"--allowedTools",
-	"Bash(node *),Bash(npm *),Bash(git status),Bash(git diff *)",
-];
 
 export const str = { type: "string", minLength: 1 };
 export const TICKET = {
@@ -98,10 +82,6 @@ export function problems(p: Plan, n: number): string[] {
 	return out;
 }
 
-const REPORTER = new URL("./red-reporter.ts", import.meta.url).href;
-const TESTS = /\.(accept|contract)\.[cm]?[jt]sx?$/;
-type Row = { name: string; ok: boolean; error: string };
-
 // 처음엔 빨강: contracts/<노드>/의 계약·인수 테스트를 파일마다 돌려, 테스트 하나하나가
 // "not implemented"로 실패해야 통과다. 불러오기 실패·문법 에러·테스트 없음·통과는 빨강이 아니다.
 // changed(재계획)면 이번에 새로 쓰거나 고친 파일만 본다. 이미 있던 테스트는 닫힌 잎이 초록으로 만들었을 수 있다
@@ -133,30 +113,9 @@ export async function red(
 			ok: false,
 			report: `contracts/${n}/에 계약·인수 테스트(*.contract.*, *.accept.*)가 없다`,
 		};
-	const tmp = mkdtempSync(join(tmpdir(), "red-"));
 	const lines: string[] = [];
 	let ok = true;
-	for (const [k, f] of files.entries()) {
-		const dest = join(tmp, `${k}.jsonl`);
-		// 빨강이면 종료 코드가 0이 아니다. 결과는 리포터가 dest에 쓴다
-		await quiet(
-			run(
-				process.execPath,
-				[
-					"--test",
-					`--test-reporter=${REPORTER}`,
-					`--test-reporter-destination=${dest}`,
-					f,
-				],
-				wt,
-			),
-		);
-		const rows: Row[] = existsSync(dest)
-			? readFileSync(dest, "utf8")
-					.split("\n")
-					.filter(Boolean)
-					.map((l) => JSON.parse(l))
-			: [];
+	for (const [f, rows] of await results(files, wt, run)) {
 		if (!rows.length) {
 			ok = false;
 			lines.push(`✗ ${f}: 테스트가 없다`);
@@ -248,6 +207,7 @@ export async function land<P>(
 	s: {
 		args: (fix: string) => string[]; // claude 인자. fix는 지난 FAIL 이유
 		check: (p: P, wt: string) => Promise<Check>;
+		own?: (p: P) => number | undefined; // 이 PR이 고쳐도 되는 계약의 노드(guard.ts Gate)
 		ticket: string; // 약속 대조가 받는 노드 이슈
 		plan: string; // 약속 대조가 읽을 계획 파일. check가 통과하면서 worktree에 쓴다
 		title: string;
@@ -266,6 +226,7 @@ export async function land<P>(
 	let fails = 0;
 	let why = "";
 	let detail = "";
+	const gate: Gate = {};
 	await run("git", ["worktree", "add", "-b", branch, wt, "origin/dev"], o.dir);
 	let fix: string | undefined = "";
 	while (fails < FAILS) {
@@ -274,6 +235,8 @@ export async function land<P>(
 			plan = JSON.parse(out).structured_output as P | undefined;
 			if (!plan)
 				throw new Error(`세션이 구조화 출력을 돌려주지 않았다\n${out}`);
+			gate.own = s.own?.(plan);
+			delete gate.wait; // 다시 짰으니 /승인은 다시 받는다
 			const c = await s.check(plan, wt);
 			if ("stop" in c) {
 				await done();
@@ -349,7 +312,7 @@ export async function land<P>(
 				continue;
 			}
 		}
-		const failed = await merge(pr, wt, o, run);
+		const failed = await merge(pr, wt, o, run, gate);
 		if (!failed) {
 			await done();
 			await quiet(run("git", ["push", "origin", "--delete", branch], o.dir));
@@ -357,6 +320,8 @@ export async function land<P>(
 		}
 		fails++;
 		[why, detail] = [firstLine(failed.why), failed.fix ?? failed.why];
+		// 노드 세션은 자기 계약만 정한다: 다른 계약을 고쳤으면 고쳐서 다시. 사람이 PR을 닫았으면 끝
+		if (failed.stop && !failed.fix) break;
 		fix = failed.fix;
 	}
 	return { plan, pr, end: "fail", why, detail };

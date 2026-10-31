@@ -10,13 +10,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
-import { lockClone, noKey, type Run, runLeaves, sh, verdict } from "./leaf.ts";
+import { lockClone, type Run, runLeaves, sh, verdict } from "./leaf.ts";
+import { noKey } from "./session.ts";
 
 type Comment = {
 	id: number;
 	body: string;
 	created_at: string;
 	updated_at?: string;
+	user?: string;
 };
 type Issue = {
 	title: string;
@@ -49,6 +51,11 @@ function fake(
 		extra?: Record<number, Partial<Issue>>; // 이슈를 더 두거나 덮어쓴다
 		prs?: object[]; // gh pr list 결과
 		touched?: string[]; // origin/dev와 달라진 추적 파일(git diff --name-only)
+		status?: string[]; // 머지 판정마다 git diff --name-status의 출력(비면 바뀐 것 없음)
+		show?: Record<string, string>; // git show <ref>:<파일>
+		trees?: Record<string, string[]>; // git ls-tree <ref> -- contracts
+		approvals?: string[]; // gh pr view(위험 경로 대기)마다 이 계정이 PR에 /승인을 단다
+		prState?: string;
 	} = {},
 ) {
 	const issues: Record<number, Issue> = {
@@ -103,11 +110,14 @@ function fake(
 	const ff = [...(o.ff ?? [])];
 	const plans = [...(o.plans ?? [])];
 	const reds = [...(o.reds ?? [])];
+	const approvals = [...(o.approvals ?? [])];
+	const status = [...(o.status ?? [])];
 	const splits: string[] = []; // 쪼개기 세션 프롬프트
 	const evals: string[] = []; // 평가자 프롬프트
 	const calls: string[] = [];
 	const prompts: string[] = [];
 	let id = 1000;
+	const prComments: Record<number, Comment[]> = {};
 	let gits = 0;
 	const git = { most: 0 }; // 동시에 돈 git 명령 수의 최대
 	const run: Run = async (cmd, args) => {
@@ -193,13 +203,24 @@ function fake(
 			return "";
 		}
 		const cm = line.match(/repos\/o\/r\/issues\/(\d+)\/comments/);
+		// PR 댓글도 같은 이슈 댓글 API다. PR은 이슈 목록에 없으니 댓글만 둔다
+		const thread = (n: number) => {
+			if (issues[n]) return issues[n].comments;
+			prComments[n] ??= [];
+			return prComments[n];
+		};
 		if (cm && args.includes("POST")) {
-			const c = { id: id++, created_at: now(), body: at("-f").slice(5) };
-			issues[Number(cm[1])].comments.push(c);
+			const c = {
+				id: id++,
+				created_at: now(),
+				body: at("-f").slice(5),
+				user: "pancheble",
+			};
+			thread(Number(cm[1])).push(c);
 			return JSON.stringify(c);
 		}
 		if (cm)
-			return issues[Number(cm[1])].comments
+			return thread(Number(cm[1]))
 				.map((c) => `${JSON.stringify(c)}\n`)
 				.join("");
 		if (line.startsWith("gh issue view")) return issues[Number(args[2])].body;
@@ -230,6 +251,29 @@ function fake(
 			return "";
 		}
 		if (line.startsWith("gh pr list")) return JSON.stringify(o.prs ?? []);
+		if (line.startsWith("git diff --name-status")) return status.shift() ?? "";
+		if (line.startsWith("git show") && o.show?.[args[1]] !== undefined)
+			return o.show[args[1]];
+		if (line.startsWith("git ls-tree"))
+			return (o.trees?.[args[3]] ?? []).join("\n");
+		if (cmd.endsWith("/biome")) {
+			const dest = args
+				.find((a) => a.startsWith("--reporter-file="))
+				?.slice(16);
+			if (dest) writeFileSync(dest, JSON.stringify({ diagnostics: [] }));
+			return "";
+		}
+		if (line.startsWith("gh pr view")) {
+			const who = approvals.shift();
+			if (who)
+				thread(12).push({
+					id: id++,
+					created_at: now(),
+					body: "/승인",
+					user: who,
+				});
+			return `${o.prState ?? "OPEN"}\n`;
+		}
 		if (line.startsWith("git diff --name-only origin/dev"))
 			return (o.touched ?? []).join("\n");
 		if (line.startsWith("gh pr create"))
@@ -271,7 +315,7 @@ function fake(
 			throw new Error("git push 실패\n! [rejected] (fetch first)");
 		return "";
 	};
-	return { calls, prompts, splits, evals, run, issues, git };
+	return { calls, prompts, splits, evals, run, issues, git, prComments };
 }
 
 // 쪼개기 세션의 기본 답: 잎 둘, 둘째는 첫째를 기다린다
@@ -1163,4 +1207,206 @@ console.log(JSON.stringify({
 		if (saved === undefined) delete process.env.GH_TOKEN;
 		else process.env.GH_TOKEN = saved;
 	}
+});
+
+// ── 지키는 장치 (T7) ──
+const prThread = (c: Record<number, Comment[]>) =>
+	(c[12] ?? []).map((x) => x.body);
+
+test("머지 앞의 판정은 PR 댓글로 남는다: 바뀐 게 없으면 통과", async () => {
+	const { calls, run, prComments } = fake();
+	await runLeaves(opts, run);
+	inOrder(calls, [
+		"git rebase origin/dev",
+		"git diff --name-status --no-renames origin/dev HEAD",
+		"gh api repos/o/r/issues/12/comments -X POST -f body=지키는 검사: 통과",
+		"gh pr checks 12",
+		"git push origin HEAD:dev",
+	]);
+	assert.match(prThread(prComments)[0], /래칫: dev에서 초록 0개/);
+});
+
+test("기존 계약 테스트를 고친 잎 PR은 막힌다: 머지 없이 막힘, 그 계약을 정한 노드에 재계획 신호", async () => {
+	const { calls, prompts, run, issues, prComments } = fake({
+		status: ["M\tcontracts/1/add.contract.js\nM\tsrc/add.js"],
+	});
+	assert.deepEqual(await runLeaves(opts, run), [
+		{ issue: 7, pr: 12, outcome: "stuck" },
+	]);
+	assert.ok(!calls.some((c) => c.startsWith("git push origin HEAD:dev")));
+	assert.ok(!calls.some((c) => c.startsWith("gh pr checks")));
+	assert.equal(prompts.length, 1); // 잎이 고쳐서 다시 하지 않는다
+	assert.match(
+		prThread(prComments)[0],
+		/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/1\/add\.contract\.js/,
+	);
+	inOrder(calls, [
+		"git diff origin/dev HEAD -- contracts/1/add.contract.js", // 제안한 변경을 막힘 이유에 담는다
+		"gh pr close leaf/7-1",
+		"gh issue edit 7 -R o/r --add-label stuck-1",
+		"gh issue edit 1 -R o/r --add-label replan",
+	]);
+	assert.match(
+		issues[7].comments.at(-1)?.body ?? "",
+		/^막힘 1\/3: 기존 계약·인수 테스트를 고쳤다/,
+	);
+	assert.match(
+		issues[1].comments.at(-1)?.body ?? "",
+		/^재계획 신호: #7이 #1의 계약 테스트를 고치려 했다 \(PR #12\)/,
+	);
+});
+
+test("래칫: dev에서 초록이던 계약 테스트가 빨강이 되면 FAIL, 깨진 테스트를 들고 고친다", async () => {
+	const trees = {
+		"origin/dev": ["contracts/1/add.contract.js", "contracts/1/app.accept.js"],
+		HEAD: ["contracts/1/add.contract.js", "contracts/1/app.accept.js"],
+	};
+	const green = [{ name: "합", ok: true, error: "" }];
+	const red = [{ name: "앱", ok: false, error: "Error: not implemented" }];
+	const broke = [{ name: "합", ok: false, error: "AssertionError" }];
+	const { calls, prompts, run, prComments } = fake({
+		trees,
+		// dev 두 파일 → HEAD는 초록이 있던 파일만. 두 번째 머지에서는 고쳤다
+		reds: [green, red, broke, green, red, green],
+	});
+	assert.deepEqual(await runLeaves(opts, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	inOrder(calls, [
+		"git worktree add --detach /clone-wt/leaf/7-1-dev origin/dev",
+		`${process.execPath} --test`,
+		"git worktree remove --force /clone-wt/leaf/7-1-dev",
+	]);
+	assert.equal(prompts.length, 2);
+	assert.match(prompts[1], /contracts\/1\/add\.contract\.js › 합/);
+	assert.ok(!prompts[1].includes("› 앱")); // 아직 빨강인 건 봐준다
+	assert.match(prThread(prComments)[0], /^지키는 검사: 막힘 — 래칫/);
+	assert.match(prThread(prComments)[1], /^지키는 검사: 통과/);
+	assert.match(
+		prThread(prComments)[1],
+		/래칫: dev에서 초록 1개 중 깨진 것: 없음/,
+	);
+});
+
+const risky = {
+	show: {
+		"origin/dev:CLAUDE.md": "# Risk paths\n\n- `src/auth/`\n",
+		"HEAD:CLAUDE.md": "# Risk paths\n\n- `src/auth/`\n",
+	},
+	status: ["M\tsrc/auth/keys.txt"],
+};
+
+test("위험 경로를 건드리면 CI 뒤에 /승인을 기다린다. 하네스 계정이 단 /승인은 세지 않는다", async () => {
+	const { calls, run, prComments } = fake({
+		...risky,
+		approvals: ["pancheble", "백찬"],
+	});
+	assert.deepEqual(await runLeaves({ ...opts, poll: 1 }, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	const [said] = prThread(prComments);
+	assert.match(said, /^지키는 검사: 사람 승인 대기/);
+	assert.match(said, /위험 경로:\n {2}- src\/auth\/keys\.txt/);
+	inOrder(calls, [
+		"gh pr checks 12",
+		"gh api --paginate repos/o/r/issues/12/comments",
+		"gh pr view 12", // 하네스 계정의 /승인이 달린다
+		"gh pr view 12", // 사람의 /승인이 달린다
+		"gh api --paginate repos/o/r/issues/12/comments",
+		"git push origin HEAD:dev",
+	]);
+	assert.equal(count(calls, "gh pr view 12"), 2);
+});
+
+test("/승인은 대기 댓글 뒤에 달린 것만 센다: 다시 평가하면 다시 받는다", async () => {
+	const { calls, run, prComments } = fake({
+		...risky,
+		status: [risky.status[0], risky.status[0]],
+		ci: [false], // CI 실패 → 고치고 다시 평가
+		approvals: ["백찬"],
+	});
+	// 첫 CI가 도는 동안 사람이 첫 대기 댓글에 /승인을 단다. 다시 평가한 뒤에는 세지 않는다
+	let early = true;
+	const spy: Run = (cmd, args, cwd, env) => {
+		if (early && cmd === "gh" && args[0] === "pr" && args[1] === "checks") {
+			early = false;
+			return run("gh", [
+				"api",
+				"repos/o/r/issues/12/comments",
+				"-X",
+				"POST",
+				"-f",
+				"body=/승인",
+			]).then(() => {
+				(prComments[12].at(-1) as Comment).user = "백찬";
+				return run(cmd, args, cwd, env);
+			});
+		}
+		return run(cmd, args, cwd, env);
+	};
+	assert.deepEqual(await runLeaves({ ...opts, poll: 1 }, spy), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	assert.equal(count(calls, "gh pr view 12"), 1);
+});
+
+test("/승인 뒤 fast-forward가 거절돼 다시 rebase해도 승인은 그대로다", async () => {
+	const { calls, run } = fake({
+		...risky,
+		status: [risky.status[0], risky.status[0]],
+		ff: [false],
+		approvals: ["백찬"],
+	});
+	assert.deepEqual(await runLeaves({ ...opts, poll: 1 }, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	assert.equal(count(calls, "git rebase origin/dev"), 2);
+	assert.equal(count(calls, "gh pr view 12"), 1);
+});
+
+test("위험 경로 대기 중에 사람이 PR을 닫으면 바로 막힌다", async () => {
+	const { calls, run, issues } = fake({ ...risky, prState: "CLOSED" });
+	assert.deepEqual(await runLeaves({ ...opts, poll: 1 }, run), [
+		{ issue: 7, pr: 12, outcome: "stuck" },
+	]);
+	assert.equal(count(calls, "git rebase origin/dev"), 1);
+	assert.ok(!calls.some((c) => c.startsWith("git push origin HEAD:dev")));
+	assert.match(
+		issues[7].comments.at(-1)?.body ?? "",
+		/^막힘 1\/3: 위험 경로 대기 중에 PR이 닫혔다/,
+	);
+});
+
+test("지운 테스트도 /승인을 기다린다. 새 의존성은 세서 댓글에만 남긴다", async () => {
+	const { run, prComments } = fake({
+		status: ["D\tsrc/add.test.js\nM\tpackage.json"],
+		show: {
+			"origin/dev:package.json": '{"dependencies":{"a":"1"}}',
+			"HEAD:package.json": '{"dependencies":{"a":"1","left-pad":"1"}}',
+		},
+		approvals: ["백찬"],
+	});
+	await runLeaves({ ...opts, poll: 1 }, run);
+	const [said] = prThread(prComments);
+	assert.match(said, /^지키는 검사: 사람 승인 대기/);
+	assert.match(said, /지운 테스트:\n {2}- src\/add\.test\.js/);
+	assert.match(said, /새 의존성:\n {2}- left-pad/);
+});
+
+test("재계획의 병렬 변경은 자기 노드의 옛 계약 테스트를 고칠 수 있다. 다른 재계획은 고치면 FAIL로 다시 짠다", async () => {
+	const touch = "M\tcontracts/1/add.contract.js";
+	const expand = fake({
+		...signalled,
+		plans: [rp({ action: "expand" })],
+		status: [touch],
+	});
+	const [r] = await runLeaves(splitOpts(), expand.run);
+	assert.deepEqual(r, { issue: 1, pr: 12, outcome: "merged" });
+
+	const resplit = fake({ ...signalled, plans: [rp(), rp()], status: [touch] });
+	const [r2] = await runLeaves(splitOpts(), resplit.run);
+	assert.deepEqual(r2, { issue: 1, pr: 12, outcome: "merged" });
+	assert.equal(resplit.splits.length, 2);
+	assert.match(resplit.splits[1], /고치거나 지우지 마/);
+	assert.ok(!resplit.issues[1].labels.includes("stuck-1"));
 });
