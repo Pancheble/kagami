@@ -60,6 +60,7 @@ function fake(
 		trees?: Record<string, string[]>; // git ls-tree <ref> -- contracts
 		approvals?: string[]; // gh pr view(위험 경로 대기)마다 이 계정이 PR에 /승인을 단다
 		prState?: string;
+		impls?: object[]; // 구현 세션의 구조화 출력(PR 칸)
 	} = {},
 ) {
 	const issues: Record<number, Issue> = {
@@ -116,6 +117,8 @@ function fake(
 	const reds = [...(o.reds ?? [])];
 	const approvals = [...(o.approvals ?? [])];
 	const status = [...(o.status ?? [])];
+	const impls = [...(o.impls ?? [])];
+	const prBodies: string[] = []; // gh pr create·edit의 --body
 	const splits: string[] = []; // 쪼개기 세션 프롬프트
 	const evals: string[] = []; // 평가자 프롬프트
 	const reports: string[] = []; // 8 보고서 세션 프롬프트
@@ -298,8 +301,17 @@ function fake(
 		}
 		if (line.startsWith("git diff --name-only origin/dev"))
 			return (o.touched ?? []).join("\n");
+		if (line.startsWith("gh pr create") || line.startsWith("gh pr edit"))
+			prBodies.push(at("--body"));
 		if (line.startsWith("gh pr create"))
 			return "https://github.com/o/r/pull/12\n";
+		if (cmd === "claude" && args[1].startsWith("너는 구현자")) {
+			prompts.push(args[1]);
+			if (o.implThrows) throw new Error("claude -p 실패\n세션이 죽었다");
+			return JSON.stringify({
+				structured_output: impls.shift() ?? impl(),
+			});
+		}
 		if (cmd === "claude" && args.includes("--append-system-prompt-file")) {
 			evals.push(args[1]);
 			return verdicts.shift() ?? "판정: PASS";
@@ -329,10 +341,6 @@ function fake(
 				writeFileSync(dest, rows.map((r) => `${JSON.stringify(r)}\n`).join(""));
 			throw new Error("node --test 실패"); // 빨강이면 종료 코드가 0이 아니다
 		}
-		if (cmd === "claude") {
-			prompts.push(args[1]);
-			if (o.implThrows) throw new Error("claude -p 실패\n세션이 죽었다");
-		}
 		if (line.startsWith("gh pr checks") && ci.shift() === false)
 			throw new Error("gh pr checks 실패\ntest\tfail");
 		if (line.startsWith("git rebase origin/dev") && rebase.shift() === false)
@@ -351,8 +359,18 @@ function fake(
 		issues,
 		git,
 		prComments,
+		prBodies,
 	};
 }
+
+// 구현 세션의 기본 답: PR 칸. 약속은 안 바꿨다
+const impl = (o: object = {}) => ({
+	decisions: "파일 하나로 끝냈다",
+	promises: "",
+	replan: "",
+	next: "",
+	...o,
+});
 
 // 쪼개기 세션의 기본 답: 잎 둘, 둘째는 첫째를 기다린다
 const plan = (o: object = {}) => ({
@@ -1763,4 +1781,153 @@ test("/다시: 같은 dev 커밋에서 8 보고서 세션이 이전 보고서와
 	assert.ok(!issues[5].labels.includes("replan"));
 	assert.ok(!issues[1].subIssues.includes(Number(nn)));
 	assert.ok(!issues[1].comments.some((c) => c.body.startsWith("써 볼 차례")));
+});
+
+// T9 템플릿: PR 템플릿, 바꾼 약속은 부모 이슈에, 재계획 칸은 8 보고서로
+
+test("구현자가 PR 칸을 구조화 출력으로 돌려주면 하네스가 PR 템플릿으로 본문을 쓴다", async () => {
+	const { calls, prBodies, run } = fake({
+		root: { title: "덧셈 앱" },
+		impls: [impl({ decisions: "정규식 대신 split", next: "빈 줄 주의" })],
+	});
+	await runLeaves(opts, run);
+	const session =
+		calls.find((c) => c.startsWith("claude -p 너는 구현자")) ?? "";
+	assert.match(session, /--output-format json --json-schema /);
+	assert.match(session, /--permission-mode acceptEdits/);
+	assert.equal(
+		prBodies[0],
+		"## 의도\n\n- 티켓: Closes #7\n- 부모 목표: #1 덧셈 앱\n\n## 결정과 이유\n\n정규식 대신 split\n\n## 바꾼 약속\n\n없음\n\n## 재계획\n\n없음\n\n## 다음 사람에게\n\n빈 줄 주의\n",
+	);
+});
+
+test("다시 구현하면 PR 본문도 새 칸으로 고쳐 쓴다", async () => {
+	const { calls, prBodies, run } = fake({
+		verdicts: ["판정: NEEDS_WORK"],
+		impls: [impl(), impl({ decisions: "고친 뒤의 결정" })],
+	});
+	await runLeaves(opts, run);
+	assert.equal(count(calls, "gh pr create"), 1);
+	assert.equal(count(calls, "gh pr edit 12 -R o/r --body"), 1);
+	assert.match(prBodies[1], /## 결정과 이유\n\n고친 뒤의 결정/);
+});
+
+test("머지된 PR의 바꾼 약속은 부모 이슈에 댓글 한 줄로 덧붙고, 재계획 칸은 잎 이슈에 남는다", async () => {
+	const { calls, run, issues } = fake({
+		impls: [
+			impl({
+				promises: "src/add.js에 sub(a, b) export를 더했다",
+				replan: "끝 기준이 파일 하나라 모듈로 나눴다",
+			}),
+		],
+	});
+	await runLeaves(opts, run);
+	inOrder(calls, [
+		"git push origin HEAD:dev",
+		"gh issue comment 1 -R o/r --body 바뀐 약속 (#7, PR #12): src/add.js에 sub(a, b) export를 더했다",
+		"gh issue comment 7 -R o/r --body 재계획 칸 (PR #12): 끝 기준이 파일 하나라 모듈로 나눴다",
+		"gh issue close 7",
+	]);
+	assert.equal(issues[1].comments.length, 1);
+	// 본문은 고치지 않는다: 덧붙이기만
+	assert.ok(!calls.some((c) => c.startsWith("gh issue edit 1 ")));
+});
+
+test("바꾼 약속과 재계획 칸이 비었거나, 머지되지 않았으면 이슈에 남기지 않는다", async () => {
+	const merged = fake();
+	await runLeaves(opts, merged.run);
+	assert.deepEqual(merged.issues[1].comments, []);
+	assert.ok(
+		!merged.issues[7].comments.some((c) => c.body.startsWith("재계획")),
+	);
+	const stuck = fake({
+		verdicts: ["판정: NEEDS_WORK", "판정: NEEDS_WORK", "판정: NEEDS_WORK"],
+		impls: [1, 2, 3].map(() => impl({ promises: "넓혔다", replan: "바꿨다" })),
+	});
+	await runLeaves(opts, stuck.run);
+	assert.ok(!stuck.calls.some((c) => c.includes("바뀐 약속")));
+	assert.ok(!stuck.calls.some((c) => c.includes("재계획 칸")));
+});
+
+test("구현 세션이 PR 칸을 돌려주지 않으면 막힘", async () => {
+	const { run, issues } = fake();
+	const bad: Run = (cmd, args, cwd) =>
+		cmd === "claude" && args[1].startsWith("너는 구현자")
+			? Promise.resolve(JSON.stringify({ result: "말로만 답함" }))
+			: run(cmd, args, cwd);
+	assert.deepEqual(await runLeaves(opts, bad), [
+		{ issue: 7, pr: 0, outcome: "stuck" },
+	]);
+	assert.match(
+		issues[7].comments.at(-1)?.body ?? "",
+		/^막힘 1\/3: 오류: 구현 세션이 PR 칸을 돌려주지 않았다/,
+	);
+});
+
+test("재계획 세션은 노드 이슈에 덧붙은 바뀐 약속을 받는다", async () => {
+	const { splits, run } = fake({
+		...signalled,
+		root: {
+			...signalled.root,
+			comments: [
+				{
+					id: 49,
+					created_at: now(),
+					body: "바뀐 약속 (#6, PR #20): add에 선택 인자 c를 더했다",
+				},
+				...signalled.root.comments,
+			],
+		},
+		plans: [rp()],
+	});
+	await runLeaves(splitOpts(), run);
+	assert.match(
+		splits[0],
+		/# 바뀐 약속[\s\S]*바뀐 약속 \(#6, PR #20\): add에 선택 인자 c를 더했다[\s\S]*# 재계획 신호/,
+	);
+});
+
+test("8 보고서 세션은 큰 가지 아래 잎 PR의 재계획 칸을 AI가 방향을 바꾼 곳으로 받는다", async () => {
+	const b = branch();
+	const { run, reports } = fake({
+		...b,
+		extra: {
+			...b.extra,
+			6: {
+				...b.extra[6],
+				comments: [
+					{
+						id: 60,
+						created_at: now(),
+						body: "재계획 칸 (PR #20): 끝 기준이 파일 하나라 모듈로 나눴다",
+					},
+				],
+			},
+		},
+	});
+	await runLeaves(splitOpts(), run);
+	assert.match(
+		reports[0],
+		/# 재계획 기록[\s\S]*- #6: 재계획 칸 \(PR #20\): 끝 기준이 파일 하나라 모듈로 나눴다/,
+	);
+});
+
+test("쪼개기 세션도 노드 이슈에 덧붙은 바뀐 약속을 받는다", async () => {
+	const { splits, run } = fake({
+		root: {
+			...bare,
+			comments: [
+				{
+					id: 49,
+					created_at: now(),
+					body: "바뀐 약속 (#6, PR #20): add에 선택 인자 c를 더했다",
+				},
+			],
+		},
+	});
+	await runLeaves(splitOpts(), run);
+	assert.match(
+		splits[0],
+		/# 바뀐 약속\n\n바뀐 약속 \(#6, PR #20\): add에 선택 인자 c를 더했다/,
+	);
 });

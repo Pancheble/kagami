@@ -11,6 +11,7 @@ import {
 	firstLine,
 	giveUp,
 	type Opts,
+	PROMISED,
 	prompt,
 	quiet,
 	type Result,
@@ -359,7 +360,11 @@ export async function split(
 			".body",
 		]);
 		if (!plan) {
-			const ticket = `노드 이슈 #${n}: ${node.title}\n\n${body}`;
+			// 머지된 잎이 덧붙인 바뀐 약속도 부모 이슈의 일부로 읽는다
+			const promised = node.comments
+				.map((k) => k.body)
+				.filter((b) => b.startsWith(PROMISED));
+			const ticket = `노드 이슈 #${n}: ${node.title}\n\n${body}${promised.length ? `\n\n# 바뀐 약속\n\n${promised.join("\n")}` : ""}`;
 			const l = await land<Plan>(node, o, run, {
 				args: (fix) => [
 					"-p",
