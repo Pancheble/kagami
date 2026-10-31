@@ -5,12 +5,10 @@
 // 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
 // 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
 import { parseArgs, promisify } from "node:util";
+import { type Gate, merge } from "./guard.ts";
 import {
 	all,
 	beat,
@@ -25,6 +23,7 @@ import {
 	unsplit,
 } from "./pick.ts";
 import { replan } from "./replan.ts";
+import { evaluate, IMPLEMENT, session } from "./session.ts";
 import { split } from "./split.ts";
 import { readTree, type Tree } from "./tree.ts";
 
@@ -44,6 +43,7 @@ export type Opts = {
 	dial: number; // 범위 다이얼
 	account: string; // claim에 적는 gh 계정
 	ttl: number; // 시간. 이보다 오래된 claim은 시도가 끊긴 것으로 본다
+	poll?: number; // ms. 위험 경로 대기에서 /승인을 다시 볼 간격(기본 1분)
 };
 export type Result = {
 	issue: number;
@@ -52,9 +52,6 @@ export type Result = {
 	outcome: "merged" | "stuck" | "human" | "up";
 };
 
-const EVALUATOR = fileURLToPath(
-	new URL("../.claude/agents/evaluator.md", import.meta.url),
-);
 export const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
 export const STUCKS = 3; // 막힘이 이만큼이면 부모에 재계획 신호
 
@@ -64,73 +61,10 @@ export const prompt = (name: string, vars: Record<string, string>) =>
 		.trimEnd()
 		.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
 
-// 열쇠를 안 준다: 세션 환경에서 GitHub·git 인증을 뺀다. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
-// 그래서 허용된 node -e로 gh나 git push를 불러도 인증이 없어 실패한다. claude 자신의 로그인은 그대로다.
-// push·PR·이슈·fetch는 하네스만 한다
-export function noKey(): NodeJS.ProcessEnv {
-	const env = { ...process.env };
-	for (const k of [
-		"GH_TOKEN",
-		"GITHUB_TOKEN",
-		"GH_ENTERPRISE_TOKEN",
-		"GITHUB_ENTERPRISE_TOKEN",
-		"SSH_AUTH_SOCK",
-	])
-		delete env[k];
-	return Object.assign(env, {
-		GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), "nokey-")), // 빈 폴더: gh가 로그인을 못 찾는다
-		GIT_TERMINAL_PROMPT: "0",
-		GIT_SSH_COMMAND: "false",
-		// 명령줄 설정으로 credential.helper를 빈 값으로: 앞서 읽은 도우미 목록(키체인 등)을 비운다
-		GIT_CONFIG_COUNT: "1",
-		GIT_CONFIG_KEY_0: "credential.helper",
-		GIT_CONFIG_VALUE_0: "",
-	});
-}
-
-// claude -p 세션은 모두 여기서 띄운다(구현자·평가자·쪼개기·재계획). 권한은 args의 플래그로 건다
-export const session = (o: Opts, args: string[], cwd: string, run: Run) =>
-	run(o.claude, args, cwd, noKey());
-
-// 평가자: 매 라운드 새 세션, 쓰기 도구 없음. 구현자의 출력은 넘기지 않는다
-export const evaluate = (text: string, wt: string, o: Opts, run: Run) =>
-	session(
-		o,
-		[
-			"-p",
-			text,
-			"--append-system-prompt-file",
-			EVALUATOR,
-			"--tools",
-			"Read,Grep,Glob,Bash",
-			// ponytail: 끝 기준을 돌릴 명령만 미리 허용한다. 티켓마다 명령이 다르면 잎 티켓에 적게 한다
-			"--allowedTools",
-			"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
-		],
-		wt,
-		run,
-	);
-
 export function verdict(report: string): "PASS" | "NEEDS_WORK" {
 	return report.match(/판정:\s*(PASS|NEEDS_WORK)/)?.[1] === "PASS"
 		? "PASS"
 		: "NEEDS_WORK";
-}
-
-async function waitChecks(pr: number, o: Opts, run: Run, cwd: string) {
-	// push 직후엔 체크가 아직 안 잡혀 있을 수 있다
-	for (let tries = 0; ; tries++) {
-		try {
-			return await run(
-				"gh",
-				["pr", "checks", String(pr), "-R", o.repo, "--watch", "--fail-fast"],
-				cwd,
-			);
-		} catch (e) {
-			if (tries >= 30 || !String(e).includes("no checks reported")) throw e;
-			await sleep(10_000);
-		}
-	}
 }
 
 export const quiet = (p: Promise<unknown>) => p.catch(() => {});
@@ -222,34 +156,6 @@ export async function giveUp(
 	]);
 }
 
-// 순차 머지: 잠금 대신 dev의 fast-forward가 잠금이다. 그 사이 dev가 움직이면 push가 거절된다.
-// 실패면 FAIL 이유를 돌려준다. fix가 있으면 구현자가 고칠 것이 있다는 뜻
-export async function merge(
-	pr: number,
-	wt: string,
-	o: Opts,
-	run: Run,
-): Promise<{ why: string; fix?: string } | undefined> {
-	await run("git", ["fetch", "origin", "dev"], wt);
-	try {
-		await run("git", ["rebase", "origin/dev"], wt);
-	} catch (e) {
-		await quiet(run("git", ["rebase", "--abort"], wt));
-		return { why: `dev에 rebase하면 충돌난다\n\n${e}` };
-	}
-	await run("git", ["push", "--force-with-lease"], wt);
-	try {
-		await waitChecks(pr, o, run, wt);
-	} catch (e) {
-		return { why: "CI 실패", fix: `CI가 실패했다. 고쳐:\n${e}` };
-	}
-	try {
-		await run("git", ["push", "origin", "HEAD:dev"], wt); // force 없이
-	} catch (e) {
-		return { why: `dev가 그새 움직여 fast-forward가 거절됐다\n\n${e}` };
-	}
-}
-
 // 한 시도: claim을 쥔 채 FAIL이 FAILS번 될 때까지 고치고 다시 평가한다. 끝나면 머지되거나 막힌다
 async function attempt(
 	tree: Tree,
@@ -265,6 +171,8 @@ async function attempt(
 	let fails = 0;
 	let why = "";
 	let detail = "";
+	let owners: number[] = []; // 계약 테스트를 고치려 했으면 그 계약들을 정한 노드
+	const gate: Gate = {};
 	try {
 		const body = await run("gh", [
 			"issue",
@@ -298,10 +206,7 @@ async function attempt(
 					[
 						"-p",
 						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
-						"--permission-mode",
-						"acceptEdits",
-						"--allowedTools",
-						"Bash(npm test),Bash(npm run *),Bash(node *),Bash(git status),Bash(git diff *)",
+						...IMPLEMENT,
 					],
 					wt,
 					run,
@@ -349,6 +254,7 @@ async function attempt(
 					["pr", "comment", String(pr), "-R", o.repo, "--body", report],
 					wt,
 				);
+				delete gate.wait; // 코드가 바뀌었으니 /승인은 다시 받는다
 				if (verdict(report) !== "PASS") {
 					fails++;
 					why = `평가 NEEDS_WORK (PR #${pr})`;
@@ -357,7 +263,7 @@ async function attempt(
 					continue;
 				}
 			}
-			const failed = await merge(pr, wt, o, run);
+			const failed = await merge(pr, wt, o, run, gate);
 			if (!failed) {
 				await run("gh", ["issue", "close", n, "-R", o.repo], o.dir);
 				await run("git", ["worktree", "remove", "--force", wt], o.dir);
@@ -365,8 +271,13 @@ async function attempt(
 				await quiet(run("git", ["push", "origin", "--delete", branch], o.dir));
 				return { issue: i.number, pr, outcome: "merged" };
 			}
-			fails++;
 			[why, detail] = [firstLine(failed.why), failed.fix ?? failed.why];
+			// 깨는 변경은 잎이 고치지 않는다: 멈추고 그 계약을 정한 노드로 보낸다
+			if (failed.stop) {
+				owners = failed.owners ?? [];
+				break;
+			}
+			fails++;
 			fix = failed.fix; // 고칠 게 없으면(충돌·거절) 구현·평가 없이 rebase부터 다시
 		}
 	} catch (e) {
@@ -374,6 +285,18 @@ async function attempt(
 		detail = String(e);
 	}
 	await giveUp(tree, i, [c], why, detail, o, run);
+	for (const owner of owners) {
+		await relabel(owner, ["replan"], [], o, run);
+		await run("gh", [
+			"issue",
+			"comment",
+			String(owner),
+			"-R",
+			o.repo,
+			"--body",
+			`재계획 신호: #${n}이 #${owner}의 계약 테스트를 고치려 했다 (PR #${pr}). 깨는 변경이면 여기서 정한다\n\n- ${why}`,
+		]);
+	}
 	return { issue: i.number, pr, outcome: "stuck" };
 }
 
