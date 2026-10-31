@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Run } from "./leaf.ts";
-import { claim, num, overlaps, ready, release, unsplit } from "./pick.ts";
+import {
+	claim,
+	isClaim,
+	num,
+	overlaps,
+	ready,
+	release,
+	replans,
+	unsplit,
+} from "./pick.ts";
 import type { Tree } from "./tree.ts";
 
 const node = (number: number, children: Tree[], replan = false): Tree => ({
@@ -12,6 +21,7 @@ const node = (number: number, children: Tree[], replan = false): Tree => ({
 	assignees: [],
 	blockedBy: [],
 	replan,
+	human: false,
 	stuck: 0,
 	scope: [],
 	comments: [],
@@ -81,7 +91,9 @@ test("안 쪼갠 노드(자식 없음)를 가까운 순으로. 닫힘 · 담당 
 		{ ...node(8, []), state: "closed" },
 		{
 			...node(9, []),
-			comments: [{ id: 1, body: "claim: x/worker-1", createdAt: "" }],
+			comments: [
+				{ id: 1, body: "claim: x/worker-1", createdAt: "", updatedAt: "" },
+			],
 		},
 	]);
 	assert.deepEqual(nums(unsplit(t, 2, Infinity)), [3, 5]);
@@ -116,10 +128,20 @@ test("이미 담당이 걸린 열린 잎과 범위가 겹치면 고르지 않는
 
 test("claim 댓글만 달리고 assignee가 아직 없는 잎도 담당이 걸린 것으로 본다", () => {
 	const claimed = [
-		{ id: 1, body: "claim: bot/worker-1", createdAt: "2026-10-30T00:00:00Z" },
+		{
+			id: 1,
+			body: "claim: bot/worker-1",
+			createdAt: "2026-10-30T00:00:00Z",
+			updatedAt: "2026-10-30T00:00:00Z",
+		},
 	];
 	const chat = [
-		{ id: 2, body: "claim은 나중에", createdAt: "2026-10-30T00:00:00Z" },
+		{
+			id: 2,
+			body: "claim은 나중에",
+			createdAt: "2026-10-30T00:00:00Z",
+			updatedAt: "2026-10-30T00:00:00Z",
+		},
 	];
 	const t = node(1, [
 		node(2, [
@@ -271,4 +293,24 @@ test("놓을 때 내 claim 댓글과 assignee를 지운다", async () => {
 		calls.includes(`gh api -X DELETE repos/o/r/issues/comments/${g.comment}`),
 	);
 	assert.ok(calls.includes("gh issue edit 10 -R o/r --remove-assignee @me"));
+});
+
+test("재계획할 노드: replan이고 사람 대기가 아니며, 아래에 돌고 있는 잎이 없다", () => {
+	const claimed = {
+		comments: [
+			{ id: 1, body: "claim: x/worker-1", createdAt: "", updatedAt: "" },
+		],
+	};
+	const t = node(1, [
+		node(2, [leaf(10, { stuck: 3 })], true),
+		node(3, [leaf(11, claimed)], true),
+		{ ...node(4, [leaf(12)], true), human: true },
+		node(5, [leaf(13)]),
+	]);
+	assert.deepEqual(nums(replans(t)), [2]);
+});
+
+test("claim 댓글은 갱신 줄이 붙어도 claim이다", () => {
+	assert.ok(isClaim("claim: x/worker-1\n갱신 2026-10-31T00:00:00.000Z"));
+	assert.ok(!isClaim("claim: x/worker-1\n아무 말"));
 });

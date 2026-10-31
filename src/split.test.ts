@@ -94,3 +94,8 @@ test("contracts/<노드>/의 계약·인수 테스트 파일만 돌린다", asyn
 	});
 	assert.equal((await red(7, dir, runIn(files))).ok, true);
 });
+
+test("재계획은 새로 쓰거나 고친 테스트만 본다: 그런 게 없으면 빨강 검사는 통과다", async () => {
+	const dir = repo({});
+	assert.equal((await red(7, dir, runIn([]), true)).ok, true);
+});

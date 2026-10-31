@@ -5,7 +5,12 @@ import { parseArgs } from "node:util";
 import { type Run, sh } from "./leaf.ts";
 
 type State = "open" | "closed";
-export type Comment = { id: number; body: string; createdAt: string };
+export type Comment = {
+	id: number;
+	body: string;
+	createdAt: string;
+	updatedAt: string; // claim 하트비트가 민다
+};
 export type Tree = {
 	number: number;
 	title: string;
@@ -14,6 +19,7 @@ export type Tree = {
 	assignees: string[];
 	blockedBy: { number: number; state: State }[];
 	replan: boolean; // 재계획 중: 아래 잎을 고르지 않는다
+	human: boolean; // 사람 대기: 사람이 라벨을 뗄 때까지 재계획하지 않는다
 	stuck: number; // 막힘 횟수
 	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
 	comments: Comment[]; // claim과 막힘 이유를 읽는다
@@ -25,6 +31,7 @@ const LABELS = [
 	["node", "노드 이슈", "1D76DB"],
 	["leaf", "잎 티켓", "0E8A16"],
 	["replan", "재계획 중: 아래 잎을 고르지 않는다", "D93F0B"],
+	["human", "사람 대기: 사람이 정할 때까지 재계획하지 않는다", "5319E7"],
 	["stuck-1", "막힘 1번", "FBCA04"],
 	["stuck-2", "막힘 2번", "FBCA04"],
 	["stuck-3", "막힘 3번: 재계획 신호", "B60205"],
@@ -48,7 +55,7 @@ export async function ensureLabels(repo: string, run: Run) {
 
 // ponytail: 댓글 말고는 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
 const PAGE =
-	"pageInfo { hasNextPage endCursor } nodes { databaseId body createdAt }";
+	"pageInfo { hasNextPage endCursor } nodes { databaseId body createdAt updatedAt }";
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
@@ -81,7 +88,12 @@ type Raw = {
 };
 type Page = {
 	pageInfo?: { hasNextPage: boolean; endCursor: string | null };
-	nodes: { databaseId: number; body: string; createdAt: string }[];
+	nodes: {
+		databaseId: number;
+		body: string;
+		createdAt: string;
+		updatedAt: string;
+	}[];
 };
 
 const lower = (s: string) => s.toLowerCase() as State;
@@ -135,6 +147,7 @@ export async function readTree(
 			state: lower(b.state),
 		})),
 		replan: labels.includes("replan"),
+		human: labels.includes("human"),
 		stuck: Math.max(
 			0,
 			...labels.map((l) => Number(l.match(/^stuck-(\d+)$/)?.[1] ?? 0)),
@@ -144,6 +157,7 @@ export async function readTree(
 			id: c.databaseId,
 			body: c.body,
 			createdAt: c.createdAt,
+			updatedAt: c.updatedAt,
 		})),
 		children: await Promise.all(
 			i.subIssues.nodes.map((c) => readTree(repo, c.number, run)),

@@ -30,7 +30,9 @@ export function path(t: Tree, focus: number): Tree[] | undefined {
 
 export const all = (t: Tree): Tree[] => [t, ...t.children.flatMap(all)];
 
-export const isClaim = (body: string) => /^claim: \S+\s*$/.test(body);
+// 하트비트가 고쳐 쓴 claim에는 "갱신 <시각>" 줄이 붙는다
+export const isClaim = (body: string) =>
+	/^claim: \S+(\n갱신 \S+)?\s*$/.test(body);
 
 // assignee는 claim을 이긴 뒤에야 걸린다. 그 틈에도 담당으로 보려고 claim 댓글도 본다
 const taken = (t: Tree) =>
@@ -91,6 +93,18 @@ export function ready(tree: Tree, focus: number, dial: number): Tree[] {
 		(t) => t.kind === "leaf" && t.blockedBy.every((b) => b.state === "closed"),
 	).filter((l) => !busy.some((b) => overlaps(b.scope, l.scope)));
 }
+
+// 재계획할 노드: replan이고 사람 대기가 아니며, 자신과 아래에 담당이 걸린 열린 이슈가 없다(돌고 있는 잎은 끝까지 둔다)
+// ponytail: 트리 순서로 고른다. 범위 다이얼은 보지 않는다(0단계.md T6 남은 일)
+export const replans = (tree: Tree) =>
+	all(tree).filter(
+		(t) =>
+			t.kind === "node" &&
+			t.replan &&
+			!t.human &&
+			t.state === "open" &&
+			!all(t).some((d) => d.state === "open" && taken(d)),
+	);
 
 // 아직 안 쪼갠 노드: 자식이 하나도 없다
 export const unsplit = (tree: Tree, focus: number, dial: number) =>
@@ -163,6 +177,22 @@ export async function claim(
 			]);
 	}
 	return got;
+}
+
+// claim 하트비트: ms마다 claim 댓글을 고쳐 써서 updatedAt을 민다. 만료는 마지막 갱신 기준이다.
+// 같은 본문으로 고치면 GitHub가 updatedAt을 안 바꿔서 갱신 시각을 본문에 적는다. 돌려준 함수로 멈춘다
+export function beat(repo: string, c: Claim, ms: number, run: Run) {
+	const t = setInterval(() => {
+		run("gh", [
+			"api",
+			"-X",
+			"PATCH",
+			`repos/${repo}/issues/comments/${c.comment}`,
+			"-f",
+			`body=claim: ${c.worker}\n갱신 ${new Date().toISOString()}`,
+		]).catch(() => {}); // 놓은 뒤에 도착하면 404다. 한 번 놓쳐도 다음 박동이 있다
+	}, ms);
+	return () => clearInterval(t);
 }
 
 // 잎을 놓을 때 claim을 지운다. 남겨 두면 다음 고르기에서 묵은 claim이 "가장 먼저"가 된다
