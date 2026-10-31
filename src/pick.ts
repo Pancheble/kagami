@@ -1,7 +1,8 @@
 // T3 잎 고르기: 트리 JSON에서 준비된 잎을 집중 노드에서 가까운 순으로 고르고 claim 댓글로 담당을 건다.
-// 실행: node src/pick.ts --repo owner/name --root <뿌리> [--focus <집중 노드>] [--dial <층 수>] [--workers 1]
+// 실행: node src/pick.ts --harness <봇 계정> --repo owner/name --root <뿌리> [--focus <집중 노드>] [--dial <층 수>] [--workers 1]
 import { parseArgs } from "node:util";
 import { type Run, sh } from "./leaf.ts";
+import { harness } from "./session.ts";
 import { readTree, type Tree } from "./tree.ts";
 
 const parts = (p: string) => p.split("/").filter((s) => s && s !== ".");
@@ -222,8 +223,10 @@ if (import.meta.main) {
 			focus: { type: "string" },
 			dial: { type: "string" },
 			workers: { type: "string", default: "1" },
+			harness: { type: "string" },
 		},
 	});
+	const account = await harness(values.harness, sh);
 	if (!values.repo || !values.root)
 		throw new Error("--repo와 --root가 필요하다");
 	const root = num("--root", values.root, 1);
@@ -234,9 +237,6 @@ if (import.meta.main) {
 	const workers = num("--workers", values.workers, 1);
 	const tree = await readTree(values.repo, root, sh);
 	const leaves = ready(tree, focus, dial);
-	const account = (await sh("gh", ["api", "user", "--jq", ".login"]))
-		.trim()
-		.toLowerCase();
 	const got = await claim(values.repo, leaves, sh, {
 		account,
 		workers,

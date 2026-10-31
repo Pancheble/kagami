@@ -1,8 +1,9 @@
 // T2 이슈 구조: 뿌리 이슈에서 하위 이슈와 blocked-by를 따라 트리를 읽어 JSON으로 내놓는다.
 // 실행: node src/tree.ts --repo owner/name --root <이슈 번호>
-//       node src/tree.ts --repo owner/name --labels   (상태 라벨 만들기)
+//       node src/tree.ts --harness <봇 계정> --repo owner/name --labels   (상태 라벨 만들기)
 import { parseArgs } from "node:util";
 import { type Run, sh } from "./leaf.ts";
+import { harness } from "./session.ts";
 
 type State = "open" | "closed";
 export type Comment = {
@@ -171,11 +172,14 @@ if (import.meta.main) {
 			repo: { type: "string" },
 			root: { type: "string" },
 			labels: { type: "boolean" },
+			harness: { type: "string" },
 		},
 	});
 	if (!values.repo) throw new Error("--repo가 필요하다");
-	if (values.labels) await ensureLabels(values.repo, sh);
-	else if (values.root)
+	if (values.labels) {
+		await harness(values.harness, sh);
+		await ensureLabels(values.repo, sh);
+	} else if (values.root)
 		console.log(
 			JSON.stringify(
 				await readTree(values.repo, Number(values.root), sh),
