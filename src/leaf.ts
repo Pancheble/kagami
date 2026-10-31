@@ -171,7 +171,7 @@ async function attempt(
 	let fails = 0;
 	let why = "";
 	let detail = "";
-	let owner = 0; // 계약 테스트를 고치려 했으면 그 계약을 정한 노드
+	let owners: number[] = []; // 계약 테스트를 고치려 했으면 그 계약들을 정한 노드
 	const gate: Gate = {};
 	try {
 		const body = await run("gh", [
@@ -274,7 +274,7 @@ async function attempt(
 			[why, detail] = [firstLine(failed.why), failed.fix ?? failed.why];
 			// 깨는 변경은 잎이 고치지 않는다: 멈추고 그 계약을 정한 노드로 보낸다
 			if (failed.stop) {
-				owner = failed.owner ?? 0;
+				owners = failed.owners ?? [];
 				break;
 			}
 			fails++;
@@ -285,7 +285,7 @@ async function attempt(
 		detail = String(e);
 	}
 	await giveUp(tree, i, [c], why, detail, o, run);
-	if (owner) {
+	for (const owner of owners) {
 		await relabel(owner, ["replan"], [], o, run);
 		await run("gh", [
 			"issue",

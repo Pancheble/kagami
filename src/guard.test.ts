@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { facts, ratchet, riskPaths, security } from "./guard.ts";
+import { facts, ratchet, riskPaths, security, unquote } from "./guard.ts";
 import { type Run, sh } from "./leaf.ts";
 
 // 진짜 git과 node --test로 돈다. 바깥 node --test가 물려주는 NODE_TEST_CONTEXT가 있으면 안쪽이 리포터를 안 써서 뺀다
@@ -193,4 +193,27 @@ test("보안 계산 검사: 바뀐 코드 파일을 Biome security 규칙으로 
 	assert.match(found[0], /bad\.js:1 lint\/security\/noGlobalEval/);
 	assert.deepEqual(await security(["ok.js"], dir, run), []);
 	assert.deepEqual(await security(["notes.txt"], dir, run), []);
+});
+
+test("한글 이름의 계약 테스트도 고치면 잡고, 래칫도 지킨다 (git이 경로를 따옴표로 감싸도)", async () => {
+	const { dir, commit } = await repo();
+	await commit({ "contracts/16/곱셈.contract.js": contract("곱셈", "곱셈") });
+	await sh("git", ["update-ref", "refs/remotes/origin/dev", "HEAD"], dir);
+	await commit({ "contracts/16/곱셈.contract.js": "// 비움\n" });
+	const status = await sh(
+		"git",
+		["diff", "--name-status", "--no-renames", "origin/dev", "HEAD"],
+		dir,
+	);
+	assert.match(status, /"contracts\/16\/\\/); // git이 감쌌다
+	const side = { md: "", pkg: "" };
+	assert.deepEqual(facts(status, side, side).contracts, [
+		"contracts/16/곱셈.contract.js",
+	]);
+	assert.equal(
+		(await ratchet(dir, run)).broken.filter((k) => k.includes("곱셈")).length,
+		2,
+	);
+	assert.equal(unquote('"a\\tb\\"c"'), 'a\tb"c');
+	assert.equal(unquote("plain/path.js"), "plain/path.js");
 });

@@ -21,18 +21,53 @@ const BIOME = fileURLToPath(
 	new URL("../node_modules/.bin/biome", import.meta.url),
 );
 const POLL = 60_000;
+const HUMAN = ["OWNER", "MEMBER", "COLLABORATOR"]; // author_association
 
 export type Row = { name: string; ok: boolean; error: string };
+
+// git은 ASCII가 아닌 글자나 따옴표가 든 경로를 "..."로 감싸고 바이트를 \ooo로 적는다(core.quotePath).
+// 안 풀면 한글 이름의 계약 테스트가 정규식과 앞부분 일치를 빠져나간다
+export function unquote(p: string): string {
+	if (!p.startsWith('"')) return p;
+	const esc: Record<string, number> = {
+		t: 9,
+		n: 10,
+		r: 13,
+		'"': 34,
+		"\\": 92,
+		a: 7,
+		b: 8,
+		f: 12,
+		v: 11,
+	};
+	const bytes: number[] = [];
+	const body = p.slice(1, -1);
+	for (let i = 0; i < body.length; i++) {
+		if (body[i] !== "\\") {
+			bytes.push(...Buffer.from(body[i]));
+			continue;
+		}
+		const oct = body.slice(i + 1, i + 4);
+		if (/^[0-7]{3}$/.test(oct)) {
+			bytes.push(Number.parseInt(oct, 8));
+			i += 3;
+		} else bytes.push(esc[body[++i]] ?? body.charCodeAt(i));
+	}
+	return Buffer.from(bytes).toString("utf8");
+}
+// git이 내놓은 경로 목록 한 줄에 하나
+export const paths = (out: string) =>
+	out.split("\n").filter(Boolean).map(unquote);
 // own: 이 PR이 고쳐도 되는 계약의 노드(재계획의 병렬 변경만). wait: 위험 경로 대기 댓글 id.
 // 그 뒤에 달린 /승인만 센다. 코드가 바뀌어 다시 평가하면 비운다
 export type Gate = { own?: number; wait?: number };
 // fix가 있으면 고칠 것이 있다는 뜻. stop이면 다시 해도 소용없다(바로 막힘).
-// owner는 깨는 변경 제안: 그 계약을 정한 노드에서 재계획한다
+// owners는 깨는 변경 제안: 그 계약들을 정한 노드에서 재계획한다
 export type Failed = {
 	why: string;
 	fix?: string;
 	stop?: boolean;
-	owner?: number;
+	owners?: number[];
 };
 
 // 계약·인수 테스트 파일마다 node --test를 따로 돌려 테스트 하나하나의 결과를 읽는다. 결과는 리포터가 파일에 쓴다.
@@ -120,7 +155,10 @@ export function facts(
 	const changes = status
 		.split("\n")
 		.filter(Boolean)
-		.map((l) => l.split("\t") as [string, string]);
+		.map((l) => {
+			const [s, f] = l.split("\t");
+			return [s, unquote(f)] as [string, string];
+		});
 	const list = riskPaths(base.md);
 	const risk = changes
 		.map(([, f]) => f)
@@ -150,15 +188,13 @@ export async function ratchet(
 	own?: number,
 ): Promise<{ broken: string[]; kept: number }> {
 	const list = async (ref: string) =>
-		(
+		paths(
 			await run(
 				"git",
 				["ls-tree", "-r", "--name-only", ref, "--", "contracts"],
 				wt,
-			)
-		)
-			.split("\n")
-			.filter((f) => TESTS.test(f));
+			),
+		).filter((f) => TESTS.test(f));
 	const files = await list("origin/dev");
 	if (!files.length) return { broken: [], kept: 0 };
 	const dev = `${wt}-dev`;
@@ -252,7 +288,7 @@ async function judge(wt: string, run: Run, own?: number) {
 	const changed = status
 		.split("\n")
 		.filter((l) => l && !l.startsWith("D"))
-		.map((l) => l.split("\t")[1]);
+		.map((l) => unquote(l.split("\t")[1]));
 	// 계약을 고쳤으면 막힌다. 래칫은 돌리지 않는다
 	const r = f.contracts.length
 		? { broken: [], kept: 0 }
@@ -269,7 +305,7 @@ async function judge(wt: string, run: Run, own?: number) {
 			why: `기존 계약·인수 테스트를 고쳤다: ${f.contracts.join(", ")}`,
 			fix: `기존 계약·인수 테스트(${f.contracts.join(", ")})는 고치거나 지우지 마. 약속을 깨야 하면 그 계약을 정한 노드의 재계획이 정한다\n\n${diff}`,
 			stop: true,
-			owner: ownerOf(f.contracts[0]) || undefined,
+			owners: [...new Set(f.contracts.map(ownerOf))].filter(Boolean),
 		};
 	} else if (r.broken.length)
 		fail = {
@@ -295,7 +331,7 @@ async function judge(wt: string, run: Run, own?: number) {
 	return { fail, wait, report };
 }
 
-// 사람의 /승인: 대기 댓글(wait) 뒤에 하네스 계정이 아닌 사람이 단 "/승인"만 센다.
+// 사람의 /승인: 대기 댓글(wait) 뒤에 하네스 계정이 아닌 사람(협업자)이 단 "/승인"만 센다.
 // 하네스와 사람이 같은 계정이면 승인할 수 없다: 하네스 전용 계정이 있어야 한다(자기 채점 금지)
 async function approve(
 	pr: number,
@@ -310,17 +346,30 @@ async function approve(
 				"--paginate",
 				`repos/${o.repo}/issues/${pr}/comments?per_page=100`,
 				"--jq",
-				".[] | {id, user: .user.login, body}",
+				".[] | {id, user: .user.login, type: .user.type, assoc: .author_association, body}",
 			])
 		)
 			.split("\n")
 			.filter(Boolean)
-			.map((l): { id: number; user: string; body: string } => JSON.parse(l));
+			.map(
+				(
+					l,
+				): {
+					id: number;
+					user: string;
+					type: string;
+					assoc: string;
+					body: string;
+				} => JSON.parse(l),
+			);
 		if (
 			cs.some(
 				(c) =>
 					c.id > wait &&
 					c.user.toLowerCase() !== o.account &&
+					// 사람 계정이고 저장소에 쓸 수 있는 사람만. PR의 워크플로가 bot으로 단 /승인은 세지 않는다
+					c.type === "User" &&
+					HUMAN.includes(c.assoc) &&
 					firstLine(c.body.trim()) === "/승인",
 			)
 		)

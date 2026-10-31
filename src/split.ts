@@ -4,7 +4,7 @@
 // 쪼개기 결과는 contracts/<노드>/leaves.json으로 같이 머지한다
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Gate, merge, results, TESTS } from "./guard.ts";
+import { type Gate, merge, paths, results, TESTS } from "./guard.ts";
 import {
 	branchOf,
 	FAILS,
@@ -91,7 +91,7 @@ export async function red(
 	run: Run,
 	changed = false,
 ): Promise<{ ok: boolean; report: string }> {
-	const files = (
+	const files = paths(
 		await run(
 			"git",
 			[
@@ -102,9 +102,8 @@ export async function red(
 				`contracts/${n}`,
 			],
 			wt,
-		)
+		),
 	)
-		.split("\n")
 		// --modified는 지운 파일도 내놓는다
 		.filter((f) => TESTS.test(f) && (!changed || existsSync(join(wt, f))));
 	if (!files.length && changed) return { ok: true, report: "새 테스트 없음" };

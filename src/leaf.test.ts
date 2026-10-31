@@ -19,6 +19,8 @@ type Comment = {
 	created_at: string;
 	updated_at?: string;
 	user?: string;
+	type?: string; // gh api의 .user.type
+	assoc?: string; // author_association
 };
 type Issue = {
 	title: string;
@@ -271,6 +273,8 @@ function fake(
 					created_at: now(),
 					body: "/승인",
 					user: who,
+					type: who.endsWith("[bot]") ? "Bot" : "User",
+					assoc: who.endsWith("[bot]") ? "NONE" : "OWNER",
 				});
 			return `${o.prState ?? "OPEN"}\n`;
 		}
@@ -1296,10 +1300,10 @@ const risky = {
 	status: ["M\tsrc/auth/keys.txt"],
 };
 
-test("위험 경로를 건드리면 CI 뒤에 /승인을 기다린다. 하네스 계정이 단 /승인은 세지 않는다", async () => {
+test("위험 경로를 건드리면 CI 뒤에 /승인을 기다린다. 하네스 계정이나 bot이 단 /승인은 세지 않는다", async () => {
 	const { calls, run, prComments } = fake({
 		...risky,
-		approvals: ["pancheble", "백찬"],
+		approvals: ["pancheble", "github-actions[bot]", "백찬"],
 	});
 	assert.deepEqual(await runLeaves({ ...opts, poll: 1 }, run), [
 		{ issue: 7, pr: 12, outcome: "merged" },
@@ -1311,11 +1315,12 @@ test("위험 경로를 건드리면 CI 뒤에 /승인을 기다린다. 하네스
 		"gh pr checks 12",
 		"gh api --paginate repos/o/r/issues/12/comments",
 		"gh pr view 12", // 하네스 계정의 /승인이 달린다
+		"gh pr view 12", // PR 워크플로가 bot으로 /승인을 단다
 		"gh pr view 12", // 사람의 /승인이 달린다
 		"gh api --paginate repos/o/r/issues/12/comments",
 		"git push origin HEAD:dev",
 	]);
-	assert.equal(count(calls, "gh pr view 12"), 2);
+	assert.equal(count(calls, "gh pr view 12"), 3);
 });
 
 test("/승인은 대기 댓글 뒤에 달린 것만 센다: 다시 평가하면 다시 받는다", async () => {
@@ -1338,7 +1343,11 @@ test("/승인은 대기 댓글 뒤에 달린 것만 센다: 다시 평가하면 
 				"-f",
 				"body=/승인",
 			]).then(() => {
-				(prComments[12].at(-1) as Comment).user = "백찬";
+				Object.assign(prComments[12].at(-1) as Comment, {
+					user: "백찬",
+					type: "User",
+					assoc: "COLLABORATOR",
+				});
 				return run(cmd, args, cwd, env);
 			});
 		}
@@ -1409,4 +1418,15 @@ test("재계획의 병렬 변경은 자기 노드의 옛 계약 테스트를 고
 	assert.equal(resplit.splits.length, 2);
 	assert.match(resplit.splits[1], /고치거나 지우지 마/);
 	assert.ok(!resplit.issues[1].labels.includes("stuck-1"));
+});
+
+test("여러 노드의 계약을 고쳤으면 노드마다 재계획 신호", async () => {
+	const { issues, run } = fake({
+		root: { subIssues: [5, 7] },
+		extra: { 5: {} },
+		status: ["M\tcontracts/1/a.contract.js\nD\tcontracts/5/b.accept.js"],
+	});
+	await runLeaves(opts, run);
+	assert.ok(issues[1].labels.includes("replan"));
+	assert.ok(issues[5].labels.includes("replan"));
 });
