@@ -31,26 +31,21 @@ export async function record(
 			`labels[]=${label}`,
 		]),
 	);
-	const same = (
-		JSON.parse(
-			await run("gh", [
-				"issue",
-				"list",
-				"-R",
-				o.repo,
-				"--label",
-				label,
-				"--state",
-				"all",
-				"--json",
-				"number",
-				"--limit",
-				"1000",
-			]),
-		) as { number: number }[]
+	// REST 목록으로 센다. gh issue list는 검색 색인이라 방금 만든 이슈가 늦게 잡혔고(시험에서 3번째가 1개로 셌다),
+	// REST도 방금 단 라벨은 늦을 수 있어 새 이슈는 늘 넣는다
+	const listed = (
+		await run("gh", [
+			"api",
+			"--paginate",
+			`repos/${o.repo}/issues?labels=${encodeURIComponent(label)}&state=all&per_page=100`,
+			"--jq",
+			".[].number",
+		])
 	)
-		.map((i) => i.number)
-		.sort((a, b) => a - b);
+		.split("\n")
+		.filter(Boolean)
+		.map(Number);
+	const same = [...new Set([...listed, number])].sort((a, b) => a - b);
 	if (same.length >= SAME)
 		await run("gh", [
 			"issue",

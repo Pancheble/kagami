@@ -4,12 +4,15 @@ import { record } from "./escape.ts";
 import type { Run } from "./leaf.ts";
 
 // 가짜 GitHub: escape 이슈와 라벨을 기억한다
-function fake(before: { number: number; labels: string[] }[] = []) {
+// lag: 목록이 방금 만든 이슈를 아직 못 본다(시험 저장소에서 일어났다)
+function fake(
+	before: { number: number; labels: string[] }[] = [],
+	lag = false,
+) {
 	const issues = [...before];
 	const calls: string[] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args].join(" "));
-		const at = (flag: string) => args[args.indexOf(flag) + 1];
 		if (
 			args[0] === "api" &&
 			args.includes("POST") &&
@@ -24,12 +27,17 @@ function fake(before: { number: number; labels: string[] }[] = []) {
 			});
 			return JSON.stringify({ number });
 		}
-		if (args[0] === "issue" && args[1] === "list")
-			return JSON.stringify(
-				issues
-					.filter((i) => i.labels.includes(at("--label")))
-					.map(({ number }) => ({ number })),
-			);
+		// 종류별 목록은 REST로 읽는다(gh issue list는 검색 색인이라 방금 만든 이슈가 늦게 잡힌다)
+		const list = args[2]?.match(
+			/^repos\/o\/kagami\/issues\?labels=([^&]+)&state=all/,
+		);
+		if (args[0] === "api" && args[1] === "--paginate" && list)
+			return issues
+				.slice(0, lag ? -1 : undefined)
+				.filter((i) => i.labels.includes(decodeURIComponent(list[1])))
+				.map((i) => `${i.number}\n`)
+				.reverse()
+				.join("");
 		return "";
 	};
 	return { calls, run, issues };
@@ -82,4 +90,17 @@ test("같은 종류가 3번 쌓이면 장치를 넣을 차례라고 새 이슈�
 	);
 	const post = calls.find((c) => c.includes("-X POST")) ?? "";
 	assert.match(post, /- 어디서: 없음/);
+});
+
+test("목록이 방금 만든 이슈를 아직 못 봐도 그 이슈는 센다", async () => {
+	const { calls, run } = fake(
+		[
+			{ number: 1, labels: ["escape", "escape:래칫"] },
+			{ number: 2, labels: ["escape", "escape:래칫"] },
+		],
+		true,
+	);
+	const r = await record({ ...o, kind: "래칫", text: "세 번째" }, run);
+	assert.deepEqual(r, { issue: 102, same: [1, 2, 102] });
+	assert.ok(calls.some((c) => c.startsWith("gh issue comment 102")));
 });
