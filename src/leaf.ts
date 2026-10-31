@@ -4,10 +4,12 @@
 //       [--focus <집중 노드>] [--dial <층 수>] [--workers 1] [--ttl <시간>] [--claude <claude 경로>]
 // 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
 // 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
+// 자식이 다 닫힌 노드는 close.ts로 닫고(큰 가지면 8 보고서), 8 보고서에 사람이 단 답을 처리한다
 import { execFile } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, promisify } from "node:util";
+import { answers, closable, close } from "./close.ts";
 import { type Gate, merge } from "./guard.ts";
 import {
 	all,
@@ -49,7 +51,8 @@ export type Result = {
 	issue: number;
 	pr: number; // PR을 만들기 전에 막혔으면 0
 	// human: 사람이 정할 때까지 멈춤 · up: 재계획을 한 층 위로 올림
-	outcome: "merged" | "stuck" | "human" | "up";
+	// closed: 노드를 닫음 · replan: 자식은 다 닫혔는데 인수 테스트가 빨강이라 재계획 신호
+	outcome: "merged" | "stuck" | "human" | "up" | "closed" | "replan";
 };
 
 export const FAILS = 3; // 한 시도에서 FAIL이 이만큼이면 막힘
@@ -357,13 +360,22 @@ const holding = async (
 	}
 };
 
-// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → (재계획) → (쪼개기 신호) → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
+// 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → 8의 답 → 부모 닫기 → (재계획) → (쪼개기 신호)
+// → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
 // ponytail: 한 번 고르고 끝난다. 다음 잎으로 계속 도는 루프는 정지 파일과 함께 T10
 export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 	const run = oneGit(raw);
 	let tree = await readTree(o.repo, o.root, run);
 	if (await expire(tree, o, run)) tree = await readTree(o.repo, o.root, run);
 	const done: Result[] = [];
+	// 8의 /다르게는 닫힌 큰 가지를 다시 열고 재계획 신호를 건다
+	if (await answers(o, run)) tree = await readTree(o.repo, o.root, run);
+	// 부모 닫기: 노드마다 claim을 이긴 쪽만 닫는다. 빨강이면 재계획 신호를 걸어 바로 아래 재계획이 잇는다
+	for (const node of closable(tree, o.root)) {
+		const [c] = await claim(o.repo, [node], run, { account: o.account });
+		if (c) done.push(await holding(c, o, run, () => close(tree, c, o, run)));
+	}
+	if (done.length) tree = await readTree(o.repo, o.root, run);
 	// 재계획: replan 노드 하나를 claim(재계획 잠금)하고 다시 짠다. 아래 잎 고르기는 replan 라벨이 막고 있다
 	// 한 번에 노드 하나. 다른 프로세스에 claim을 지면 다음 replan 노드로
 	const [r] = await claim(o.repo, replans(tree), run, {

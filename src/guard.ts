@@ -331,8 +331,35 @@ async function judge(wt: string, run: Run, own?: number) {
 	return { fail, wait, report };
 }
 
-// 사람의 /승인: 대기 댓글(wait) 뒤에 하네스 계정이 아닌 사람(협업자)이 단 "/승인"만 센다.
-// 하네스와 사람이 같은 계정이면 승인할 수 없다: 하네스 전용 계정이 있어야 한다(자기 채점 금지)
+// 이슈·PR 댓글을 쓴 사람과 함께 끝까지 읽는다
+export type Said = {
+	id: number;
+	user: string;
+	type: string; // User · Bot
+	assoc: string; // author_association
+	body: string;
+};
+export const said = async (repo: string, n: number, run: Run) =>
+	(
+		await run("gh", [
+			"api",
+			"--paginate",
+			`repos/${repo}/issues/${n}/comments?per_page=100`,
+			"--jq",
+			".[] | {id, user: .user.login, type: .user.type, assoc: .author_association, body}",
+		])
+	)
+		.split("\n")
+		.filter(Boolean)
+		.map((l): Said => JSON.parse(l));
+// 사람의 판정(/승인, 8의 /맞다 등)은 하네스 계정이 아닌 사람(협업자 이상)이 단 것만 센다.
+// PR의 워크플로가 bot으로 단 댓글도 세지 않는다. 하네스와 사람이 같은 계정이면 판정할 수 없다(자기 채점 금지)
+export const byHuman = (c: Said, account: string) =>
+	c.user.toLowerCase() !== account &&
+	c.type === "User" &&
+	HUMAN.includes(c.assoc);
+
+// 사람의 /승인: 대기 댓글(wait) 뒤에 사람이 단 "/승인"만 센다
 async function approve(
 	pr: number,
 	wait: number,
@@ -340,36 +367,11 @@ async function approve(
 	run: Run,
 ): Promise<Failed | undefined> {
 	for (;;) {
-		const cs = (
-			await run("gh", [
-				"api",
-				"--paginate",
-				`repos/${o.repo}/issues/${pr}/comments?per_page=100`,
-				"--jq",
-				".[] | {id, user: .user.login, type: .user.type, assoc: .author_association, body}",
-			])
-		)
-			.split("\n")
-			.filter(Boolean)
-			.map(
-				(
-					l,
-				): {
-					id: number;
-					user: string;
-					type: string;
-					assoc: string;
-					body: string;
-				} => JSON.parse(l),
-			);
 		if (
-			cs.some(
+			(await said(o.repo, pr, run)).some(
 				(c) =>
 					c.id > wait &&
-					c.user.toLowerCase() !== o.account &&
-					// 사람 계정이고 저장소에 쓸 수 있는 사람만. PR의 워크플로가 bot으로 단 /승인은 세지 않는다
-					c.type === "User" &&
-					HUMAN.includes(c.assoc) &&
+					byHuman(c, o.account) &&
 					firstLine(c.body.trim()) === "/승인",
 			)
 		)

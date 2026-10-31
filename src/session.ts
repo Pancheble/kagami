@@ -116,21 +116,24 @@ export const WRITE = [
 	"Bash(node *),Bash(npm *),Bash(git status),Bash(git diff *)",
 ];
 
+// 읽기 세션(평가자·8 보고서)의 권한: 쓰기 도구 없음
+const READ = [
+	"--tools",
+	"Read,Grep,Glob,Bash",
+	// ponytail: 끝 기준을 돌릴 명령만 미리 허용한다. 티켓마다 명령이 다르면 잎 티켓에 적게 한다
+	"--allowedTools",
+	"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
+];
+
 // 평가자: 매 라운드 새 세션, 쓰기 도구 없음. 구현자의 출력은 넘기지 않는다
 export const evaluate = (text: string, wt: string, o: Opts, run: Run) =>
 	session(
 		o,
-		[
-			"-p",
-			text,
-			"--append-system-prompt-file",
-			EVALUATOR,
-			"--tools",
-			"Read,Grep,Glob,Bash",
-			// ponytail: 끝 기준을 돌릴 명령만 미리 허용한다. 티켓마다 명령이 다르면 잎 티켓에 적게 한다
-			"--allowedTools",
-			"Bash(npm *),Bash(node *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status),Bash(git rev-parse *)",
-		],
+		["-p", text, "--append-system-prompt-file", EVALUATOR, ...READ],
 		wt,
 		run,
 	);
+
+// 8 보고서: 평가자와 같은 권한으로 dev에서 뿌리 성공 기준을 돌린다. 티켓 diff 판정이 아니라 역할은 프롬프트(prompts/report.md)로만
+export const report = (text: string, wt: string, o: Opts, run: Run) =>
+	session(o, ["-p", text, ...READ], wt, run);
