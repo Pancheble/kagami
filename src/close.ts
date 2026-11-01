@@ -1,8 +1,8 @@
 // T8 부모 닫기와 8: 자식이 다 닫힌 노드는 dev의 인수 테스트가 초록일 때만 닫는다. 빨강이면 그 노드에 재계획 신호.
 // 닫으면 부모 아래에 플래그 지우기 잎을 만든다. 큰 가지(뿌리의 자식)가 닫히면 8 보고서 세션이 dev에서
 // 뿌리 성공 기준을 돌려 보고서 이슈를 쓰고, 뿌리에 써 볼 차례를 알린다.
-// 보고서 이슈에 사람이 단 /맞다 · /아니다 · /다르게 · /다시를 읽어 처리한다. 하네스는 이 댓글을 달지 않는다
-import { byHuman, results, said } from "./guard.ts";
+// 보고서 이슈에 사람이 단 /맞다 · /아니다 · /다르게 · /다시를 읽어 처리한다(/맞다는 promote.ts가 main을 옮긴다). 하네스는 이 댓글을 달지 않는다
+import { results } from "./guard.ts";
 import {
 	firstLine,
 	type Opts,
@@ -13,6 +13,7 @@ import {
 	relabel,
 } from "./leaf.ts";
 import { all, type Claim, path, release } from "./pick.ts";
+import { first, promote } from "./promote.ts";
 import { report } from "./session.ts";
 import { create } from "./split.ts";
 import { readTree, type Tree } from "./tree.ts";
@@ -231,15 +232,7 @@ export async function answers(o: Opts, run: Run): Promise<boolean> {
 	);
 	let any = false;
 	for (const r of open) {
-		const a = (await said(o.repo, r.number, run))
-			.filter((c) => byHuman(c, o.account))
-			.map((c) => ({
-				who: c.user,
-				m: c.body
-					.trim()
-					.match(/^\/(맞다|아니다|다르게|다시)(?:\s+([\s\S]*))?$/),
-			}))
-			.find((x) => x.m);
+		const a = await first(o.repo, r.number, o.account, run);
 		if (!a?.m) continue;
 		const [, word, why = ""] = a.m;
 		const by = `8 보고서 #${r.number}, @${a.who}`;
@@ -256,8 +249,11 @@ export async function answers(o: Opts, run: Run): Promise<boolean> {
 		const big = field(r.body, "큰 가지");
 		let done = "";
 		if (word === "맞다") {
-			const sha = r.body.match(/^- dev: (\S+)$/m)?.[1];
-			done = `맞다 (@${a.who}): main으로 올릴 것은 dev ${sha}`;
+			// 못 올리면 이유를 남기고 닫는다. main을 고친 뒤 이 이슈를 다시 열면 같은 /맞다로 다시 시도한다
+			const p = await promote(r.body, o, run);
+			done = p.ok
+				? `맞다 (@${a.who}): ${p.done}`
+				: `맞다 (@${a.who}): main으로 못 올렸다: ${p.done}\n\nmain을 고친 뒤 이 이슈를 다시 열면 다시 시도한다`;
 		} else if (word === "아니다") {
 			const root = field(r.body, "뿌리");
 			await say(root, `아니다 (${by}): 뿌리를 고친다. 기획 대화로 돌아간다`);
