@@ -11,8 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mock, test } from "node:test";
 import { closable } from "./close.ts";
-import { lockClone, type Run, runLeaves, sh, verdict } from "./leaf.ts";
+import { lockClone, loop, type Run, runLeaves, sh, verdict } from "./leaf.ts";
 import { noKey } from "./session.ts";
+import { steerFile } from "./steer.ts";
+import { stop } from "./stop.ts";
 import type { Tree } from "./tree.ts";
 
 type Comment = {
@@ -406,6 +408,7 @@ const opts = {
 	dial: Infinity,
 	account: "pancheble",
 	ttl: 6,
+	ctl: mkdtempSync(join(tmpdir(), "ctl-")), // 정지·방향 수정 파일 폴더. 정지 시험은 새 폴더를 쓴다
 };
 
 // calls 안에 order가 이 순서로 나오는지
@@ -1930,4 +1933,73 @@ test("쪼개기 세션도 노드 이슈에 덧붙은 바뀐 약속을 받는다"
 		splits[0],
 		/# 바뀐 약속\n\n바뀐 약속 \(#6, PR #20\): add에 선택 인자 c를 더했다/,
 	);
+});
+
+// ── 정지와 방향 수정 (T10) ──
+// 정지 파일이 생기는 순간을 고른다: when에 맞는 명령이 처음 불릴 때 정지 파일을 만든다
+const stopAt = (run: Run, when: (line: string) => boolean) => {
+	const ctl = mkdtempSync(join(tmpdir(), "ctl-"));
+	const wrapped: Run = async (cmd, args, cwd, env) => {
+		const out = await run(cmd, args, cwd, env);
+		if (when([cmd, ...args].join(" "))) stop(ctl, true);
+		return out;
+	};
+	return { ctl, run: wrapped };
+};
+
+test("정지 파일이 있으면 한 번 돌기는 아무것도 시작하지 않는다: 트리 읽기도, claim도, 세션도 없다", async () => {
+	const { calls, run } = fake();
+	const ctl = mkdtempSync(join(tmpdir(), "ctl-"));
+	stop(ctl, true);
+	assert.deepEqual(await runLeaves({ ...opts, ctl }, run), []);
+	assert.deepEqual(calls, []);
+});
+
+test("돌다가 정지 파일이 생기면 다음 단계를 시작하지 않는다: 쪼개기를 끝내고 새 잎은 고르지 않는다", async () => {
+	const f = fake({ root: bare });
+	const { ctl, run } = stopAt(f.run, (l) => l.startsWith("gh pr create"));
+	assert.deepEqual(await runLeaves({ ...splitOpts(), ctl }, run), [
+		{ issue: 1, pr: 12, outcome: "merged" },
+	]);
+	assert.equal(count(f.calls, "claude -p 너는 구현자"), 0);
+	assert.deepEqual(claims(f.issues[9]), []);
+});
+
+test("8의 답을 읽다가 정지 파일이 생기면 부모 닫기도 시작하지 않는다", async () => {
+	const f = fake(branch());
+	const { ctl, run } = stopAt(f.run, (l) => l.startsWith("gh issue list"));
+	assert.deepEqual(await runLeaves({ ...splitOpts(), ctl }, run), []);
+	assert.equal(f.issues[5].state, "OPEN");
+	assert.deepEqual(claims(f.issues[5]), []);
+});
+
+test("loop는 할 일이 없을 때까지 한 번 돌기를 되풀이한다", async () => {
+	const { run, issues } = fake({ two: true });
+	assert.deepEqual(await loop(opts, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+		{ issue: 8, pr: 12, outcome: "merged" },
+	]);
+	assert.equal(issues[8].state, "CLOSED");
+});
+
+test("잎을 하는 동안 정지 파일을 만들면 그 잎은 끝내고, 다음 잎을 시작하지 않는다", async () => {
+	const f = fake({ two: true });
+	const { ctl, run } = stopAt(f.run, (l) =>
+		l.startsWith("claude -p 너는 구현자"),
+	);
+	assert.deepEqual(await loop({ ...opts, ctl }, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	assert.equal(f.issues[7].state, "CLOSED");
+	assert.equal(f.issues[8].state, "OPEN");
+	assert.deepEqual(claims(f.issues[8]), []);
+	assert.equal(count(f.calls, "claude -p 너는 구현자"), 1);
+});
+
+test("구현 세션은 그 잎의 방향 수정 파일을 읽는 hook을 받는다", async () => {
+	const { calls, run } = fake();
+	await runLeaves(opts, run);
+	const line = calls.find((c) => c.startsWith("claude -p 너는 구현자")) ?? "";
+	assert.ok(line.includes("--settings"));
+	assert.ok(line.includes(steerFile(opts.ctl, "o/r", 7)));
 });

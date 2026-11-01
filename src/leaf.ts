@@ -5,6 +5,7 @@
 // 준비된 잎이 일꾼 수보다 적으면 split.ts로 가장 가까운 안 쪼갠 노드를 쪼갠다(쪼개기 신호)
 // 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
 // 자식이 다 닫힌 노드는 close.ts로 닫고(큰 가지면 8 보고서), 8 보고서에 사람이 단 답을 처리한다
+// 할 일이 없거나 정지 파일(src/stop.ts)이 생길 때까지 한 번 돌기를 되풀이한다. 잎에 방향 수정은 src/steer.ts
 import { execFile } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -25,8 +26,9 @@ import {
 	unsplit,
 } from "./pick.ts";
 import { replan } from "./replan.ts";
-import { evaluate, harness, IMPLEMENT, session } from "./session.ts";
+import { evaluate, harness, implement, session } from "./session.ts";
 import { split } from "./split.ts";
+import { CTL, stopped } from "./stop.ts";
 import { readTree, type Tree } from "./tree.ts";
 
 export type Run = (
@@ -46,6 +48,7 @@ export type Opts = {
 	account: string; // 하네스 계정(봇, 소문자). claim에 적고, /승인에서 뺀다
 	ttl: number; // 시간. 이보다 오래된 claim은 시도가 끊긴 것으로 본다
 	poll?: number; // ms. 위험 경로 대기에서 /승인을 다시 볼 간격(기본 1분)
+	ctl: string; // 정지·방향 수정 파일 폴더
 };
 export type Result = {
 	issue: number;
@@ -236,7 +239,7 @@ async function attempt(
 					[
 						"-p",
 						prompt("implement", { ticket, before, fix: fix && `\n\n${fix}` }),
-						...IMPLEMENT,
+						...implement(o, i.number),
 						"--output-format",
 						"json",
 						"--json-schema",
@@ -420,20 +423,25 @@ const holding = async (
 
 // 한 번 돌기: 트리를 읽고 → 끊긴 시도를 막힘으로 → 8의 답 → 부모 닫기 → (재계획) → (쪼개기 신호)
 // → pick.ts로 일꾼 수만큼 고르고 claim → 잎마다 시도
-// ponytail: 한 번 고르고 끝난다. 다음 잎으로 계속 도는 루프는 정지 파일과 함께 T10
+// 단계마다 정지 파일을 본다: 있으면 다음 단계를 시작하지 않고 지금까지 한 것만 돌려준다
 export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 	const run = oneGit(raw);
+	const halt = () => stopped(o.ctl);
+	const done: Result[] = [];
+	if (halt()) return done;
 	let tree = await readTree(o.repo, o.root, run);
 	if (await expire(tree, o, run)) tree = await readTree(o.repo, o.root, run);
-	const done: Result[] = [];
+	if (halt()) return done;
 	// 8의 /다르게는 닫힌 큰 가지를 다시 열고 재계획 신호를 건다
 	if (await answers(o, run)) tree = await readTree(o.repo, o.root, run);
 	// 부모 닫기: 노드마다 claim을 이긴 쪽만 닫는다. 빨강이면 재계획 신호를 걸어 바로 아래 재계획이 잇는다
 	for (const node of closable(tree, o.root)) {
+		if (halt()) return done;
 		const [c] = await claim(o.repo, [node], run, { account: o.account });
 		if (c) done.push(await holding(c, o, run, () => close(tree, c, o, run)));
 	}
 	if (done.length) tree = await readTree(o.repo, o.root, run);
+	if (halt()) return done;
 	// 재계획: replan 노드 하나를 claim(재계획 잠금)하고 다시 짠다. 아래 잎 고르기는 replan 라벨이 막고 있다
 	// 한 번에 노드 하나. 다른 프로세스에 claim을 지면 다음 replan 노드로
 	const [r] = await claim(o.repo, replans(tree), run, {
@@ -443,6 +451,7 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 		done.push(await holding(r, o, run, () => replan(tree, r, o, run)));
 		tree = await readTree(o.repo, o.root, run);
 	}
+	if (halt()) return done;
 	let leaves = ready(tree, o.focus, o.dial);
 	// 쪼개기 신호: 준비된 잎이 일꾼 수보다 적으면 가장 가까운 안 쪼갠 노드를 쪼개고 다시 고른다
 	// ponytail: 한 번에 노드 하나. 모자란 만큼 여러 노드를 쪼개는 건 일꾼이 여럿일 때
@@ -456,6 +465,7 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 			leaves = ready(tree, o.focus, o.dial);
 		}
 	}
+	if (halt()) return done;
 	const got = await claim(o.repo, leaves, run, {
 		account: o.account,
 		workers: o.workers,
@@ -466,6 +476,17 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 			got.map((c) => holding(c, o, run, () => attempt(tree, c, o, run))),
 		)),
 	];
+}
+
+// 할 일이 없거나(한 번 돌기가 아무것도 안 함) 정지 파일이 생길 때까지 한 번 돌기를 되풀이한다.
+// 막힌 잎은 다음 돌기에서 새 세션으로 다시 하고, 세 번이면 재계획, 재계획이 안 풀리면 사람(human)에서 멈춘다
+export async function loop(o: Opts, run: Run): Promise<Result[]> {
+	const all: Result[] = [];
+	for (;;) {
+		const got = await runLeaves(o, run);
+		all.push(...got);
+		if (!got.length || stopped(o.ctl)) return all;
+	}
 }
 
 // 클론 하나에 프로세스 하나: oneGit은 한 프로세스 안에서만 줄을 세운다.
@@ -536,11 +557,14 @@ if (import.meta.main) {
 		focus: values.focus === undefined ? root : num("--focus", values.focus, 1),
 		dial: values.dial === undefined ? Infinity : num("--dial", values.dial, 0),
 		ttl: num("--ttl", values.ttl, 1),
+		ctl: CTL,
 	};
 	const account = await harness(values.harness, sh);
 	process.on("exit", lockClone(o.dir));
-	const results = await runLeaves({ ...o, account }, sh);
+	const results = await loop({ ...o, account }, sh);
 	console.log(JSON.stringify(results, null, 2));
+	if (stopped(o.ctl))
+		console.error(`정지 파일이 있어 멈췄다: node src/stop.ts --off로 푼다`);
 	if (results.some((r) => r.outcome === "stuck" || r.outcome === "human"))
 		process.exitCode = 1;
 }

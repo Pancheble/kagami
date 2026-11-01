@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import type { Opts, Run } from "./leaf.ts";
+import { steerFile } from "./steer.ts";
 
 const EVALUATOR = fileURLToPath(
 	new URL("../.claude/agents/evaluator.md", import.meta.url),
@@ -100,12 +101,32 @@ export function noKey(): NodeJS.ProcessEnv {
 export const session = (o: Opts, args: string[], cwd: string, run: Run) =>
 	run(o.claude, args, cwd, noKey());
 
-// 구현자: worktree에 쓰고 테스트를 돌린다
-export const IMPLEMENT = [
+const STEER = fileURLToPath(new URL("../hooks/steer.sh", import.meta.url));
+const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+// 구현자: worktree에 쓰고 테스트를 돌린다. 그 잎의 방향 수정 파일(src/steer.ts)을 읽는 cwc steer hook을 건다:
+// 도구를 부를 때마다 파일에 글이 있으면 그 호출을 한 번 막고 글을 보여 준다. 프로젝트 설정의 hook에 더해진다
+export const implement = (o: Pick<Opts, "ctl" | "repo">, n: number) => [
 	"--permission-mode",
 	"acceptEdits",
 	"--allowedTools",
 	"Bash(npm test),Bash(npm run *),Bash(node *),Bash(git status),Bash(git diff *)",
+	"--settings",
+	JSON.stringify({
+		hooks: {
+			PreToolUse: [
+				{
+					matcher: "*",
+					hooks: [
+						{
+							type: "command",
+							command: `AGENT_STEER_FILE=${q(steerFile(o.ctl, o.repo, n))} bash ${q(STEER)}`,
+						},
+					],
+				},
+			],
+		},
+	}),
 ];
 
 // 노드 세션(쪼개기·재계획)의 권한: worktree에 쓰고 테스트를 돌린다. gh는 없다. 읽을 것은 프롬프트로 준다
