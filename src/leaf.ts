@@ -11,7 +11,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, promisify } from "node:util";
 import { answers, closable, close } from "./close.ts";
-import { type Gate, merge } from "./guard.ts";
+import { type Gate, install, merge } from "./guard.ts";
 import {
 	all,
 	beat,
@@ -230,6 +230,7 @@ async function attempt(
 			["worktree", "add", "-b", branch, wt, "origin/dev"],
 			o.dir,
 		);
+		await install(wt, run); // 구현 세션과 평가자가 테스트를 돌리게
 
 		let fix: string | undefined = "";
 		while (fails < FAILS) {

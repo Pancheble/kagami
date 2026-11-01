@@ -2,7 +2,7 @@
 // 닫으면 부모 아래에 플래그 지우기 잎을 만든다. 큰 가지(뿌리의 자식)가 닫히면 8 보고서 세션이 dev에서
 // 뿌리 성공 기준을 돌려 보고서 이슈를 쓰고, 뿌리에 써 볼 차례를 알린다.
 // 보고서 이슈에 사람이 단 /맞다 · /아니다 · /다르게 · /다시를 읽어 처리한다(/맞다는 promote.ts가 main을 옮긴다). 하네스는 이 댓글을 달지 않는다
-import { results } from "./guard.ts";
+import { install, results } from "./guard.ts";
 import {
 	firstLine,
 	type Opts,
@@ -272,6 +272,7 @@ export async function answers(o: Opts, run: Run): Promise<boolean> {
 			await quiet(run("git", ["worktree", "remove", "--force", wt], o.dir));
 			await run("git", ["worktree", "add", "--detach", wt, sha], o.dir);
 			try {
+				await install(wt, run); // 8 보고서 세션이 성공 기준을 돌리게
 				const k = await review(tree, node, sha, wt, o, run, {
 					again: { prev: r.number, text: r.body, why },
 				});

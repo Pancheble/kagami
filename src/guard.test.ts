@@ -10,7 +10,14 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { facts, ratchet, riskPaths, security, unquote } from "./guard.ts";
+import {
+	facts,
+	install,
+	ratchet,
+	riskPaths,
+	security,
+	unquote,
+} from "./guard.ts";
 import { type Run, sh } from "./leaf.ts";
 
 // 진짜 git과 node --test로 돈다. 바깥 node --test가 물려주는 NODE_TEST_CONTEXT가 있으면 안쪽이 리포터를 안 써서 뺀다
@@ -115,6 +122,80 @@ test("래칫: 불러오기가 깨져 테스트가 안 돌면 깨진 것이다", 
 	const { dir, commit } = await repo();
 	await commit({}, ["src/mul.js"]);
 	assert.equal((await ratchet(dir, run)).broken.length, 4);
+});
+
+// 계약이 npm 패키지(여기선 file: 의존성이라 네트워크 없이 깔린다)를 거쳐 불리는 저장소.
+// 루트 postinstall은 돌면 ran 파일을 만든다
+async function withDeps() {
+	const r = await repo();
+	await r.commit({
+		".gitignore": "node_modules/\n",
+		"vendor/dep/package.json":
+			'{"name":"dep","version":"1.0.0","type":"module","main":"index.js"}\n',
+		"vendor/dep/index.js": "export const mul = (a, b) => a * b;\n",
+		"package.json": JSON.stringify({
+			name: "t",
+			private: true,
+			type: "module",
+			dependencies: { dep: "file:vendor/dep" },
+			scripts: {
+				postinstall: "node -e \"require('fs').writeFileSync('ran','')\"",
+			},
+		}),
+		"package-lock.json": JSON.stringify({
+			name: "t",
+			lockfileVersion: 3,
+			requires: true,
+			packages: {
+				"": { name: "t", dependencies: { dep: "file:vendor/dep" } },
+				"node_modules/dep": { resolved: "vendor/dep", link: true },
+				"vendor/dep": { version: "1.0.0" },
+			},
+		}),
+		"src/mul.js": 'export { mul } from "dep";\n',
+	});
+	await sh("git", ["update-ref", "refs/remotes/origin/dev", "HEAD"], r.dir);
+	return r;
+}
+
+test("래칫: 의존성이 있는 저장소에서도 dev의 초록을 지킨다 (설치 스크립트는 안 돈다)", async () => {
+	const { dir, commit } = await withDeps();
+	await commit({
+		"vendor/dep/index.js": "export const mul = (a, b) => a + b;\n",
+	});
+	const r = await ratchet(dir, run);
+	assert.equal(r.kept, 4);
+	assert.equal(r.broken.length, 4);
+	assert.ok(!existsSync(join(dir, "ran")), "postinstall은 돌지 않는다");
+});
+
+test("래칫: 의존성이 있는 저장소에서 안 깨뜨렸으면 통과", async () => {
+	const { dir, commit } = await withDeps();
+	await commit({ "README.md": "x\n" });
+	assert.deepEqual(await ratchet(dir, run), { broken: [], kept: 4 });
+});
+
+test("의존성 설치: lock 파일이 있으면 인증 없는 환경에서 npm ci --ignore-scripts, 없으면 안 깐다", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "install-"));
+	const calls: { cmd: string; args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+	const fake: Run = async (cmd, args, _cwd, env) => {
+		calls.push({ cmd, args, env });
+		return "";
+	};
+	await install(dir, fake);
+	assert.equal(calls.length, 0);
+	writeFileSync(join(dir, "package-lock.json"), "{}");
+	process.env.GH_TOKEN = "secret";
+	try {
+		await install(dir, fake);
+	} finally {
+		delete process.env.GH_TOKEN;
+	}
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0].cmd, "npm");
+	assert.deepEqual(calls[0].args.slice(0, 2), ["ci", "--ignore-scripts"]);
+	assert.equal(calls[0].env?.GH_TOKEN, undefined);
+	assert.ok(calls[0].env?.GH_CONFIG_DIR);
 });
 
 const md = (...paths: string[]) =>
