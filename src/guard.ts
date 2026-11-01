@@ -7,12 +7,16 @@
 //   사실 계산: 위험 경로(dev의 CLAUDE.md 목록), 지운 테스트, 새 의존성을 센다
 //   보안 계산 검사: 바뀐 코드를 Biome security 규칙으로 본다
 // 판정은 PR 댓글로 남긴다. 위험 경로·지운 테스트·보안 지적이 있으면 CI 뒤에 사람의 /승인을 기다린다
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+// 같은 판정(judge)을 대상 저장소의 CI 잡(ci/guard.yml)에서도 돌려 팀원이 연 PR에 보인다. CI는 보여 주기만 한다:
+// GitHub에 쓰지 않고(읽기 토큰), 판정을 문으로 쓰지 않는다. PR이 워크플로를 고치면 CI 결과는 바뀌니 dev로 가는 문은 merge 하나다.
+// 실행(CI): node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
+import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { firstLine, type Opts, quiet, type Run } from "./leaf.ts";
+import { parseArgs } from "node:util";
+import { firstLine, type Opts, quiet, type Run, sh } from "./leaf.ts";
 import { noKey } from "./session.ts";
 import type { Tree } from "./tree.ts";
 
@@ -316,7 +320,7 @@ const items = (xs: string[]) =>
 	xs.length ? xs.map((x) => `\n  - ${x}`).join("") : " 없음";
 
 // 판정: 막힘(fail)이면 머지하지 않는다. wait면 CI 뒤에 /승인을 기다린다. report는 PR 댓글 본문
-async function judge(wt: string, run: Run, own?: number) {
+export async function judge(wt: string, run: Run, own?: number) {
 	const show = (ref: string, f: string) =>
 		run("git", ["show", `${ref}:${f}`], wt).catch(() => "");
 	const status = await run(
@@ -406,9 +410,10 @@ export const said = async (repo: string, n: number, run: Run) =>
 // 사람의 판정(/승인, 8의 /맞다 등)은 하네스 계정이 아닌 사람(협업자 이상)이 단 것만 센다.
 // PR의 워크플로가 bot으로 단 댓글도 세지 않는다. 하네스와 사람이 같은 계정이면 판정할 수 없다(자기 채점 금지)
 export const byHuman = (c: Said, account: string) =>
-	c.user.toLowerCase() !== account &&
-	c.type === "User" &&
-	HUMAN.includes(c.assoc);
+	c.user.toLowerCase() !== account && member(c);
+// 협업자 이상의 사람 계정(User). 하네스 계정(머신 유저)도 든다. claim은 이것만 센다(사람도 일꾼 하나)
+export const member = (c: { type?: string; assoc?: string }) =>
+	c.type === "User" && HUMAN.includes(c.assoc ?? "");
 
 // 사람의 /승인: 대기 댓글(wait) 뒤에 사람이 단 "/승인"만 센다
 async function approve(
@@ -508,4 +513,21 @@ export async function merge(
 	} catch (e) {
 		return { why: `dev가 그새 움직여 fast-forward가 거절됐다\n\n${e}` };
 	}
+}
+
+// CI 잡: 머지 단계와 같은 judge를 PR 체크아웃(HEAD = PR을 dev에 얹은 커밋)에서 돌려 결과를 로그와 잡 요약에 보인다.
+// 막힘이면 체크가 빨강, 대기면 경고만(/승인과 머지는 하네스의 merge에서). own(계약 정리 잎)은 하네스 PR에만 있어 CI는 안 본다
+if (import.meta.main) {
+	const { values } = parseArgs({
+		options: { dir: { type: "string", default: "." } },
+	});
+	const j = await judge(resolve(values.dir), sh);
+	console.log(j.report);
+	if (process.env.GITHUB_STEP_SUMMARY)
+		appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${j.report}\n`);
+	if (j.fail) process.exitCode = 1;
+	else if (j.wait)
+		console.log(
+			"::warning::kagami 가드: 하네스였다면 사람 /승인을 기다릴 PR이다 (위험 경로·지운 테스트·보안 지적)",
+		);
 }

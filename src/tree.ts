@@ -9,6 +9,8 @@ type State = "open" | "closed";
 export type Comment = {
 	id: number;
 	author: string; // 단 계정. 지워진 계정이면 ""
+	type?: string; // User · Bot. 모르면 없음
+	assoc?: string; // author_association(OWNER · MEMBER · COLLABORATOR …). claim을 누가 달았나 센다
 	body: string;
 	createdAt: string;
 	updatedAt: string; // claim 하트비트가 민다
@@ -57,7 +59,7 @@ export async function ensureLabels(repo: string, run: Run) {
 
 // ponytail: 댓글 말고는 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
 const PAGE =
-	"pageInfo { hasNextPage endCursor } nodes { databaseId author { login } body createdAt updatedAt }";
+	"pageInfo { hasNextPage endCursor } nodes { databaseId author { login __typename } authorAssociation body createdAt updatedAt }";
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
@@ -92,7 +94,8 @@ type Page = {
 	pageInfo?: { hasNextPage: boolean; endCursor: string | null };
 	nodes: {
 		databaseId: number;
-		author: { login: string } | null;
+		author: { login: string; __typename: string } | null;
+		authorAssociation: string;
 		body: string;
 		createdAt: string;
 		updatedAt: string;
@@ -159,6 +162,8 @@ export async function readTree(
 		comments: comments.map((c) => ({
 			id: c.databaseId,
 			author: c.author?.login ?? "",
+			type: c.author?.__typename,
+			assoc: c.authorAssociation,
 			body: c.body,
 			createdAt: c.createdAt,
 			updatedAt: c.updatedAt,

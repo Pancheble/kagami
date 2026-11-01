@@ -164,7 +164,9 @@ function fake(
 							comments: {
 								nodes: i.comments.map((c) => ({
 									databaseId: c.id,
-									author: c.user ? { login: c.user } : null,
+									// 작성자를 따로 적지 않은 댓글은 협업자가 단 것으로 본다(GitHub는 늘 작성자를 준다)
+									author: { login: c.user ?? "", __typename: c.type ?? "User" },
+									authorAssociation: c.assoc ?? "COLLABORATOR",
 									body: c.body,
 									createdAt: c.created_at,
 									updatedAt: c.updated_at ?? c.created_at,
@@ -230,6 +232,8 @@ function fake(
 				created_at: now(),
 				body: at("-f").slice(5),
 				user: "pancheble",
+				type: "User",
+				assoc: "COLLABORATOR", // 하네스 계정도 협업자다
 			};
 			thread(Number(cm[1])).push(c);
 			return JSON.stringify(c);
@@ -617,8 +621,18 @@ test("시도가 끊겨 claim이 만료되면 막혔을 때와 같은 길: claim 
 		leaf: {
 			assignees: ["pancheble"],
 			comments: [
-				{ id: 1, created_at: old, body: "claim: pancheble/worker-1" },
-				{ id: 2, created_at: old, body: "claim: pancheble/worker-2" }, // 진 쪽이 지우기 전에 죽음
+				{
+					id: 1,
+					created_at: old,
+					body: "claim: pancheble/worker-1",
+					user: "pancheble",
+				},
+				{
+					id: 2,
+					created_at: old,
+					body: "claim: pancheble/worker-2",
+					user: "pancheble",
+				}, // 진 쪽이 지우기 전에 죽음
 			],
 		},
 	});
@@ -635,6 +649,72 @@ test("시도가 끊겨 claim이 만료되면 막혔을 때와 같은 길: claim 
 		"git worktree add -b leaf/7-2",
 	]);
 	assert.ok(calls.includes("gh api -X DELETE repos/o/r/issues/comments/2"));
+});
+
+test("사람 claim은 만료되지 않는다: 오래된 사람 협업자의 claim은 지우지도 막힘으로 세지도 않고, 그 잎을 고르지 않는다", async () => {
+	const { calls, run, issues } = fake({
+		leaf: {
+			comments: [
+				{
+					id: 1,
+					created_at: "2020-01-01T00:00:00Z",
+					body: "claim: teammate",
+					user: "teammate",
+					type: "User",
+					assoc: "COLLABORATOR",
+				},
+			],
+		},
+	});
+	assert.deepEqual(await runLeaves(opts, run), []);
+	assert.ok(
+		!calls.some((c) => c.includes("DELETE") || c.includes("body=claim:")),
+	);
+	assert.deepEqual(issues[7].labels, ["leaf"]);
+});
+
+test("사람이 claim을 지우면 하네스가 그 잎을 다시 고른다", async () => {
+	const human = {
+		id: 1,
+		created_at: now(),
+		body: "claim: teammate",
+		user: "teammate",
+		type: "User",
+		assoc: "MEMBER",
+	};
+	const { run, issues } = fake({ leaf: { comments: [human] } });
+	assert.deepEqual(await runLeaves(opts, run), []);
+	issues[7].comments = []; // 사람이 지웠다
+	assert.deepEqual(await runLeaves(opts, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+});
+
+test("협업자가 아닌 사람·bot의 claim은 세지 않는다: 그 잎을 고르고, 그 댓글은 만료로 치우지도 않는다", async () => {
+	for (const [type, assoc] of [
+		["User", "NONE"],
+		["Bot", "NONE"],
+	]) {
+		const { calls, run, issues } = fake({
+			leaf: {
+				comments: [
+					{
+						id: 1,
+						created_at: "2020-01-01T00:00:00Z",
+						body: "claim: someone",
+						user: "someone",
+						type,
+						assoc,
+					},
+				],
+			},
+		});
+		assert.deepEqual(await runLeaves(opts, run), [
+			{ issue: 7, pr: 12, outcome: "merged" },
+		]);
+		assert.ok(!calls.includes("gh api -X DELETE repos/o/r/issues/comments/1"));
+		assert.ok(!issues[7].labels.some((l) => l.startsWith("stuck-")));
+	}
 });
 
 test("만료되지 않은 claim은 건드리지 않고, 그 잎을 고르지 않는다", async () => {

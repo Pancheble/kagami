@@ -48,7 +48,8 @@ const issues: Record<number, object> = {
 			nodes: [
 				{
 					databaseId: 70,
-					author: { login: "bot" },
+					author: { login: "bot", __typename: "User" },
+					authorAssociation: "COLLABORATOR",
 					body: "claim: bot/worker-1",
 					createdAt: "2026-10-30T00:00:00Z",
 					updatedAt: "2026-10-31T00:00:00Z",
@@ -142,6 +143,8 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 					{
 						id: 70,
 						author: "bot",
+						type: "User",
+						assoc: "COLLABORATOR",
 						body: "claim: bot/worker-1",
 						createdAt: "2026-10-30T00:00:00Z",
 						updatedAt: "2026-10-31T00:00:00Z",

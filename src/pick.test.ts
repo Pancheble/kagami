@@ -95,6 +95,8 @@ test("안 쪼갠 노드(자식 없음)를 가까운 순으로. 닫힘 · 담당 
 				{
 					id: 1,
 					author: "x",
+					type: "User",
+					assoc: "COLLABORATOR",
 					body: "claim: x/worker-1",
 					createdAt: "",
 					updatedAt: "",
@@ -137,6 +139,8 @@ test("claim 댓글만 달리고 assignee가 아직 없는 잎도 담당이 걸�
 		{
 			id: 1,
 			author: "bot",
+			type: "User",
+			assoc: "COLLABORATOR",
 			body: "claim: bot/worker-1",
 			createdAt: "2026-10-30T00:00:00Z",
 			updatedAt: "2026-10-30T00:00:00Z",
@@ -173,7 +177,14 @@ test("--workers, --dial 같은 숫자 인자는 정수인지 검사한다", () =
 });
 
 // claim 댓글: 가장 먼저 달린 claim이 이긴다. 같은 시각이면 댓글 id가 작은 쪽
-type Comment = { id: number; created_at: string; body: string };
+type Comment = {
+	id: number;
+	created_at: string;
+	body: string;
+	user?: string;
+	type?: string;
+	assoc?: string;
+};
 function fake(before: Record<number, Comment[]> = {}) {
 	const calls: string[] = [];
 	const comments: Record<number, Comment[]> = structuredClone(before);
@@ -191,13 +202,19 @@ function fake(before: Record<number, Comment[]> = {}) {
 				id: id++,
 				created_at: "2026-10-30T00:00:05Z",
 				body: args[args.indexOf("-f") + 1].slice(5),
+				type: "User",
+				assoc: "COLLABORATOR", // 하네스 계정도 협업자다
 			};
 			comments[Number(m[1])] = [...(comments[Number(m[1])] ?? []), c];
 			return JSON.stringify(c);
 		}
+		// 작성자를 따로 적지 않은 댓글은 협업자(다른 하네스 일꾼 등)가 단 것으로 본다
 		if (m)
 			return (comments[Number(m[1])] ?? [])
-				.map((c) => `${JSON.stringify(c)}\n`)
+				.map(
+					(c) =>
+						`${JSON.stringify({ type: "User", assoc: "COLLABORATOR", ...c })}\n`,
+				)
 				.join("");
 		return "";
 	};
@@ -309,6 +326,8 @@ test("재계획할 노드: replan이고 사람 대기가 아니며, 아래에 �
 			{
 				id: 1,
 				author: "x",
+				type: "User",
+				assoc: "COLLABORATOR",
 				body: "claim: x/worker-1",
 				createdAt: "",
 				updatedAt: "",
@@ -327,4 +346,89 @@ test("재계획할 노드: replan이고 사람 대기가 아니며, 아래에 �
 test("claim 댓글은 갱신 줄이 붙어도 claim이다", () => {
 	assert.ok(isClaim("claim: x/worker-1\n갱신 2026-10-31T00:00:00.000Z"));
 	assert.ok(!isClaim("claim: x/worker-1\n아무 말"));
+});
+
+// 사람도 일꾼 하나: 협업자 이상의 사람 계정(User)이 단 claim도 하네스 claim과 같은 판정으로 담당이다
+const said = (author: string, type: string, assoc: string) => [
+	{
+		id: 1,
+		author,
+		type,
+		assoc,
+		body: `claim: ${author}`,
+		createdAt: "2026-10-30T00:00:00Z",
+		updatedAt: "2026-10-30T00:00:00Z",
+	},
+];
+
+test("사람 협업자가 단 claim도 담당이다: 그 잎과 범위가 겹치는 잎을 고르지 않는다. 협업자가 아닌 사람·bot의 claim은 세지 않는다", () => {
+	const t = (comments: Tree["comments"]) =>
+		node(1, [
+			leaf(10, { scope: ["src/x/"], comments }),
+			leaf(11, { scope: ["src/x/y.ts"] }),
+			leaf(12),
+		]);
+	for (const assoc of ["OWNER", "MEMBER", "COLLABORATOR"])
+		assert.deepEqual(
+			nums(ready(t(said("teammate", "User", assoc)), 1, 0)),
+			[12],
+			assoc,
+		);
+	for (const [type, assoc] of [
+		["User", "CONTRIBUTOR"],
+		["User", "NONE"],
+		["Bot", "NONE"],
+		["Bot", "COLLABORATOR"],
+	])
+		assert.deepEqual(
+			nums(ready(t(said("someone", type, assoc)), 1, 0)),
+			[10, 11, 12],
+			`${type} ${assoc}`,
+		);
+	// 작성자를 모르는 claim(지워진 계정 등)도 세지 않는다
+	assert.deepEqual(
+		nums(ready(t([{ ...said("", "", "")[0] }]), 1, 0)),
+		[10, 11, 12],
+	);
+	// 사람이 claim을 지우면 다시 고른다
+	assert.deepEqual(nums(ready(t([]), 1, 0)), [10, 11, 12]);
+});
+
+test("사람 claim이 걸린 잎이 아래에 있으면 재계획하지 않는다 (하네스 claim과 같다)", () => {
+	const t = node(1, [
+		node(2, [leaf(10, { comments: said("teammate", "User", "MEMBER") })], true),
+		node(3, [leaf(11, { comments: said("x", "User", "NONE") })], true),
+	]);
+	assert.deepEqual(nums(replans(t)), [3]);
+});
+
+test("먼저 단 사람 협업자의 claim이 이긴다. 협업자가 아닌 사람·bot의 claim은 순서에 안 든다", async () => {
+	const early = (user: string, type: string, assoc: string) =>
+		fake({
+			10: [
+				{
+					id: 7,
+					created_at: "2026-10-30T00:00:01Z",
+					body: `claim: ${user}`,
+					user,
+					type,
+					assoc,
+				} as Comment,
+			],
+		});
+	const human = early("teammate", "User", "COLLABORATOR");
+	const a = await claim("o/r", ls(), human.run, { account: "pancheble" });
+	assert.equal(a[0].leaf.number, 11);
+	assert.ok(
+		human.calls.includes("gh api -X DELETE repos/o/r/issues/comments/1000"),
+	);
+	for (const [type, assoc] of [
+		["User", "NONE"],
+		["Bot", "NONE"],
+	]) {
+		const b = await claim("o/r", ls(), early("x", type, assoc).run, {
+			account: "pancheble",
+		});
+		assert.equal(b[0].leaf.number, 10, `${type} ${assoc}`);
+	}
 });

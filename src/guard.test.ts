@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -356,4 +357,72 @@ test("한글 이름의 계약 테스트도 고치면 잡고, 래칫도 지킨다
 	);
 	assert.equal(unquote('"a\\tb\\"c"'), 'a\tb"c');
 	assert.equal(unquote("plain/path.js"), "plain/path.js");
+});
+
+// CI의 가드: 같은 판정(judge)을 대상 저장소의 PR 체크아웃에서 돌린다. GitHub에 쓰지 않고 보여 주기만 한다
+const ci = (dir: string) => {
+	const summary = join(mkdtempSync(join(tmpdir(), "summary-")), "s.md");
+	const r = spawnSync(
+		"env",
+		[
+			"-u",
+			"NODE_TEST_CONTEXT",
+			"-u",
+			"GH_TOKEN",
+			"-u",
+			"GITHUB_TOKEN",
+			`GITHUB_STEP_SUMMARY=${summary}`,
+			process.execPath,
+			new URL("./guard.ts", import.meta.url).pathname,
+			"--dir",
+			dir,
+		],
+		{ encoding: "utf8" },
+	);
+	return {
+		code: r.status,
+		out: r.stdout,
+		summary: existsSync(summary) ? readFileSync(summary, "utf8") : "",
+	};
+};
+
+test("CI 가드: 기존 계약 테스트를 고친 PR은 머지 단계와 같은 판정으로 막힘을 보이고 체크가 빨강이다", async () => {
+	const { dir, commit } = await repo();
+	await commit({
+		"contracts/16/mul.contract.js": contract("mul", "느슨하게 고침"),
+	});
+	const r = ci(dir);
+	assert.equal(r.code, 1, r.out);
+	assert.match(
+		r.out,
+		/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/mul\.contract\.js/m,
+	);
+	assert.match(r.summary, /지키는 검사: 막힘/);
+});
+
+test("CI 가드: 래칫이 깨진 PR도 막힘, 안 깨뜨렸으면 통과(초록)", async () => {
+	const broke = await repo();
+	await broke.commit({ "src/mul.js": "export const mul = (a, b) => a + b;\n" });
+	const a = ci(broke.dir);
+	assert.equal(a.code, 1, a.out);
+	assert.match(a.out, /^지키는 검사: 막힘 — 래칫/m);
+	const fine = await repo();
+	await fine.commit({ "README.md": "x\n" });
+	const b = ci(fine.dir);
+	assert.equal(b.code, 0, b.out);
+	assert.match(b.out, /^지키는 검사: 통과/m);
+	assert.match(b.out, /래칫: dev에서 초록 4개 중 깨진 것: 없음/);
+});
+
+test("CI 가드: 위험 경로를 건드린 PR은 사람 승인 대기를 경고로 보인다(체크는 초록, 승인과 머지는 하네스에서만)", async () => {
+	const { dir, commit } = await repo();
+	await commit({ "CLAUDE.md": "# Risk paths\n\n- `ci/`\n" });
+	const base = await sh("git", ["rev-parse", "HEAD"], dir);
+	await sh("git", ["update-ref", "refs/remotes/origin/dev", base.trim()], dir);
+	await commit({ "ci/guard.yml": "x\n" });
+	const r = ci(dir);
+	assert.equal(r.code, 0, r.out);
+	assert.match(r.out, /^지키는 검사: 사람 승인 대기/m);
+	assert.match(r.out, /^::warning::/m);
+	assert.match(r.out, /위험 경로:\n {2}- ci\/guard\.yml/);
 });
