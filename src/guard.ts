@@ -70,13 +70,29 @@ export type Failed = {
 	owners?: number[];
 };
 
+// 대상 저장소의 의존성을 worktree에 깐다. 테스트를 돌리는 곳(results)과 세션이 쓰는 worktree는 모두 이 길로 간다.
+// 대상 저장소의 코드를 받는 일이라 인증 없는 환경에서, 설치 스크립트(lifecycle)는 돌리지 않는다.
+// lock 파일대로만 깐다(npm ci). 못 깔면 던진다: 판정할 수 없는 걸 통과로 보지 않는다
+// ponytail: npm의 package-lock.json만. pnpm·yarn이나 lock 없는 저장소는 안 깐다(불러오기 실패로 빨강)
+export async function install(wt: string, run: Run) {
+	if (!existsSync(join(wt, "package-lock.json"))) return;
+	await run(
+		"npm",
+		["ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+		wt,
+		noKey(),
+	);
+}
+
 // 계약·인수 테스트 파일마다 node --test를 따로 돌려 테스트 하나하나의 결과를 읽는다. 결과는 리포터가 파일에 쓴다.
-// 세션이 쓴 코드를 돌리니 인증 없는 환경에서 돌린다. 파일이 불러와지지 않으면 결과가 비어 있다
+// 세션이 쓴 코드를 돌리니 인증 없는 환경에서 돌린다. 파일이 불러와지지 않으면 결과가 비어 있다.
+// 그 커밋의 lock 파일로 의존성을 먼저 깐다(rebase로 dev의 lock이 바뀌었을 수 있다)
 export async function results(
 	files: string[],
 	cwd: string,
 	run: Run,
 ): Promise<Map<string, Row[]>> {
+	if (files.length) await install(cwd, run);
 	const tmp = mkdtempSync(join(tmpdir(), "rows-"));
 	const out = new Map<string, Row[]>();
 	for (const [k, f] of files.entries()) {

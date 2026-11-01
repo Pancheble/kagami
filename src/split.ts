@@ -4,7 +4,7 @@
 // 쪼개기 결과는 contracts/<노드>/leaves.json으로 같이 머지한다
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Gate, merge, paths, results, TESTS } from "./guard.ts";
+import { type Gate, install, merge, paths, results, TESTS } from "./guard.ts";
 import {
 	branchOf,
 	FAILS,
@@ -228,6 +228,7 @@ export async function land<P>(
 	let detail = "";
 	const gate: Gate = {};
 	await run("git", ["worktree", "add", "-b", branch, wt, "origin/dev"], o.dir);
+	await install(wt, run); // 세션이 테스트를 돌리게
 	let fix: string | undefined = "";
 	while (fails < FAILS) {
 		if (fix !== undefined) {
