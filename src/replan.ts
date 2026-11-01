@@ -6,6 +6,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { CLEANUP } from "./guard.ts";
 import {
 	firstLine,
 	giveUp,
@@ -39,7 +40,7 @@ export type Replan = {
 	behavior: string; // 사용자에게 보이는 동작이 바뀌었으면 한 줄, 아니면 ""
 	close: number[]; // 닫을 열린 자식
 	rewrite: Rewrite[]; // 고쳐 쓸 열린 자식
-	leaves: Ticket[]; // 새 잎. waitFor는 이 목록의 번호
+	leaves: (Ticket & { cleanup?: boolean })[]; // 새 잎. waitFor는 이 목록의 번호. cleanup은 계약 정리 잎(expand만)
 };
 
 const SCHEMA = JSON.stringify({
@@ -88,6 +89,8 @@ export function replanProblems(p: Replan, node: Tree): string[] {
 		if (c.stuck >= STUCKS && !touched.includes(c.number))
 			out.push(`막힌 잎 #${c.number}을 닫거나 고쳐 쓰지 않았다`);
 	if (!touched.length && !p.leaves.length) out.push("아무것도 바꾸지 않았다");
+	if (p.action !== "expand" && p.leaves.some((l) => l.cleanup))
+		out.push("계약 정리 잎은 병렬 변경(expand)에서만 만든다");
 	out.push(...problems({ asIs: false, leaves: p.leaves }, node.number));
 	out.push(
 		...problems(
@@ -300,6 +303,14 @@ export async function replan(
 				]);
 			}
 			const made = await create(node, p.leaves, o, run);
+			// 계약 정리 표시는 하네스 계정이 댓글로 단다. 잎 세션·잎 PR은 GitHub 열쇠가 없어 스스로 얻지 못한다(guard.ts cleanup)
+			// ponytail: 여기 오기 전에 죽으면 표시 없는 정리 잎이 남아 막히고 다시 재계획으로 온다
+			for (const [k, l] of p.leaves.entries())
+				if (l.cleanup)
+					await comment(
+						made[k],
+						`${CLEANUP}#${n}): 재계획(expand)이 만든 잎이다. ${dir}/의 옛 계약 테스트(*.contract.*)를 고치거나 지울 수 있다. 인수 테스트는 아니다`,
+					);
 			// ponytail: 여기까지 오다 죽으면 replan이 남아 다시 짜고 반쯤 만든 잎이 남는다(0단계.md T6 남은 일)
 			await relabel(node.number, [], ["replan"], o, run);
 			const what = [

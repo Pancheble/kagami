@@ -92,7 +92,13 @@ test("안 쪼갠 노드(자식 없음)를 가까운 순으로. 닫힘 · 담당 
 		{
 			...node(9, []),
 			comments: [
-				{ id: 1, body: "claim: x/worker-1", createdAt: "", updatedAt: "" },
+				{
+					id: 1,
+					author: "x",
+					body: "claim: x/worker-1",
+					createdAt: "",
+					updatedAt: "",
+				},
 			],
 		},
 	]);
@@ -130,6 +136,7 @@ test("claim 댓글만 달리고 assignee가 아직 없는 잎도 담당이 걸�
 	const claimed = [
 		{
 			id: 1,
+			author: "bot",
 			body: "claim: bot/worker-1",
 			createdAt: "2026-10-30T00:00:00Z",
 			updatedAt: "2026-10-30T00:00:00Z",
@@ -138,6 +145,7 @@ test("claim 댓글만 달리고 assignee가 아직 없는 잎도 담당이 걸�
 	const chat = [
 		{
 			id: 2,
+			author: "pancheble",
 			body: "claim은 나중에",
 			createdAt: "2026-10-30T00:00:00Z",
 			updatedAt: "2026-10-30T00:00:00Z",
@@ -298,7 +306,13 @@ test("놓을 때 내 claim 댓글과 assignee를 지운다", async () => {
 test("재계획할 노드: replan이고 사람 대기가 아니며, 아래에 돌고 있는 잎이 없다", () => {
 	const claimed = {
 		comments: [
-			{ id: 1, body: "claim: x/worker-1", createdAt: "", updatedAt: "" },
+			{
+				id: 1,
+				author: "x",
+				body: "claim: x/worker-1",
+				createdAt: "",
+				updatedAt: "",
+			},
 		],
 	};
 	const t = node(1, [

@@ -11,6 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+	CLEANUP,
+	cleanup,
 	facts,
 	install,
 	ratchet,
@@ -116,6 +118,63 @@ test("래칫: 초록이던 테스트가 사라져도 깨진 것이다. 예외는
 	]);
 	assert.deepEqual((await ratchet(dir, run, 16)).broken, []);
 	assert.equal((await ratchet(dir, run, 17)).broken.length, 2);
+});
+
+test("래칫: 자기 노드라도 이 PR이 손대지 않은 계약 테스트는 지킨다", async () => {
+	const { dir, commit } = await repo();
+	await commit({ "src/mul.js": "export const mul = (a, b) => a + b;\n" }, [
+		"contracts/16/old.contract.js",
+	]);
+	assert.deepEqual((await ratchet(dir, run, 16)).broken.sort(), [
+		"contracts/16/mul.contract.js › mul 둘",
+		"contracts/16/mul.contract.js › mul 하나",
+	]);
+});
+
+test("래칫: 자기 노드의 옛 계약 파일을 비슷한 새 파일로 옮겨도 손댄 파일로 본다 (git의 rename 감지와 상관없이)", async () => {
+	const { dir, commit } = await repo();
+	await commit(
+		{
+			"contracts/16/new.contract.js": contract("old", "old").replace(
+				"// old",
+				"// new",
+			),
+		},
+		["contracts/16/old.contract.js"],
+	);
+	assert.deepEqual((await ratchet(dir, run, 16)).broken, []);
+});
+
+test("계약 정리 표시: 하네스 계정이 잎 이슈에 단 '계약 정리 (#노드)' 댓글만 센다", () => {
+	const leaf = (...cs: { author: string; body: string }[]) => ({
+		comments: cs.map((c, id) => ({ id, createdAt: "", updatedAt: "", ...c })),
+	});
+	const mark = `${CLEANUP}#16): 옛 계약 테스트를 지운다`;
+	assert.equal(
+		cleanup(leaf({ author: "kagami-bot", body: mark }), "kagami-bot"),
+		16,
+	);
+	assert.equal(
+		cleanup(leaf({ author: "Kagami-Bot", body: mark }), "kagami-bot"),
+		16,
+	);
+	// 사람·워크플로가 단 같은 글, 하네스가 단 다른 머리의 글(세션이 쓴 글이 뒤에 붙는다)은 표시가 아니다
+	assert.equal(
+		cleanup(leaf({ author: "pancheble", body: mark }), "kagami-bot"),
+		undefined,
+	);
+	assert.equal(
+		cleanup(leaf({ author: "github-actions", body: mark }), "kagami-bot"),
+		undefined,
+	);
+	assert.equal(
+		cleanup(
+			leaf({ author: "kagami-bot", body: `재계획 칸 (PR #3): ${mark}` }),
+			"kagami-bot",
+		),
+		undefined,
+	);
+	assert.equal(cleanup(leaf(), "kagami-bot"), undefined);
 });
 
 test("래칫: 불러오기가 깨져 테스트가 안 돌면 깨진 것이다", async () => {

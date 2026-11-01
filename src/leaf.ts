@@ -11,7 +11,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs, promisify } from "node:util";
 import { answers, closable, close } from "./close.ts";
-import { type Gate, install, merge } from "./guard.ts";
+import { cleanup, type Gate, install, merge } from "./guard.ts";
 import {
 	all,
 	beat,
@@ -27,6 +27,7 @@ import {
 } from "./pick.ts";
 import { replan } from "./replan.ts";
 import { evaluate, harness, implement, session } from "./session.ts";
+import { check, readRoot } from "./spec.ts";
 import { split } from "./split.ts";
 import { CTL, stopped } from "./stop.ts";
 import { readTree, type Tree } from "./tree.ts";
@@ -205,7 +206,8 @@ async function attempt(
 	let why = "";
 	let detail = "";
 	let owners: number[] = []; // 계약 테스트를 고치려 했으면 그 계약들을 정한 노드
-	const gate: Gate = {};
+	// 계약 정리 잎(재계획이 표시)만 자기 노드의 옛 계약 테스트를 고치거나 지울 수 있다
+	const gate: Gate = { own: cleanup(i, o.account) };
 	try {
 		const body = await run("gh", [
 			"issue",
@@ -480,8 +482,14 @@ export async function runLeaves(o: Opts, raw: Run): Promise<Result[]> {
 }
 
 // 할 일이 없거나(한 번 돌기가 아무것도 안 함) 정지 파일이 생길 때까지 한 번 돌기를 되풀이한다.
-// 막힌 잎은 다음 돌기에서 새 세션으로 다시 하고, 세 번이면 재계획, 재계획이 안 풀리면 사람(human)에서 멈춘다
+// 막힌 잎은 다음 돌기에서 새 세션으로 다시 하고, 세 번이면 재계획, 재계획이 안 풀리면 사람(human)에서 멈춘다.
+// 시작할 때 뿌리에 명세 점검(src/spec.ts)을 돌린다. 빠진 칸이 있으면 GitHub에 쓰기 전에 거부한다(설계가 비면 기획 대화로)
 export async function loop(o: Opts, run: Run): Promise<Result[]> {
+	const missing = check(await readRoot(o.repo, o.root, run));
+	if (missing.length)
+		throw new Error(
+			`명세 점검 #${o.root}: 빠진 항목이 있어 시작하지 않는다. 기획 대화(/plan-talk)로 돌아간다\n${missing.map((m) => `- ${m}`).join("\n")}`,
+		);
 	const all: Result[] = [];
 	for (;;) {
 		const got = await runLeaves(o, run);
