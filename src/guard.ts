@@ -236,6 +236,7 @@ export async function ratchet(
 						[
 							"diff",
 							"--name-only",
+							"--no-renames", // facts()와 같게: 옮긴 옛 파일도 손댄 파일이다
 							"origin/dev",
 							"HEAD",
 							"--",

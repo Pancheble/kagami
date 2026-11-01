@@ -131,6 +131,20 @@ test("래칫: 자기 노드라도 이 PR이 손대지 않은 계약 테스트는
 	]);
 });
 
+test("래칫: 자기 노드의 옛 계약 파일을 비슷한 새 파일로 옮겨도 손댄 파일로 본다 (git의 rename 감지와 상관없이)", async () => {
+	const { dir, commit } = await repo();
+	await commit(
+		{
+			"contracts/16/new.contract.js": contract("old", "old").replace(
+				"// old",
+				"// new",
+			),
+		},
+		["contracts/16/old.contract.js"],
+	);
+	assert.deepEqual((await ratchet(dir, run, 16)).broken, []);
+});
+
 test("계약 정리 표시: 하네스 계정이 잎 이슈에 단 '계약 정리 (#노드)' 댓글만 센다", () => {
 	const leaf = (...cs: { author: string; body: string }[]) => ({
 		comments: cs.map((c, id) => ({ id, createdAt: "", updatedAt: "", ...c })),
