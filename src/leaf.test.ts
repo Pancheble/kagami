@@ -275,6 +275,14 @@ function fake(
 					.map(([n, i]) => ({ number: Number(n), body: i.body })),
 			);
 		if (line.startsWith("git rev-parse origin/dev")) return "abc123\n";
+		if (line.startsWith("git ls-remote origin refs/heads/main"))
+			return "main0\trefs/heads/main\n";
+		// main0은 dev 커밋의 조상이고, dev 커밋은 아직 main에 없다
+		if (
+			line.startsWith("git merge-base --is-ancestor") &&
+			args[3] !== "origin/dev"
+		)
+			throw new Error("git merge-base 실패");
 		if (line.startsWith("gh pr list")) return JSON.stringify(o.prs ?? []);
 		if (line.startsWith("git diff --name-status")) return status.shift() ?? "";
 		if (line.startsWith("git show") && o.show?.[args[1]] !== undefined)
@@ -1690,15 +1698,41 @@ const answered = (...comments: Comment[]) =>
 		},
 	});
 
-test("/맞다: 사람이 달면 보고서 이슈를 닫고 main으로 올릴 dev 커밋을 남긴다", async () => {
-	const { run, issues } = answered(human("/맞다"));
+test("/맞다: 사람이 달면 보고서의 dev 커밋으로 main을 force 없이 fast-forward하고 보고서 이슈를 닫는다", async () => {
+	const { run, issues, calls } = answered(human("/맞다"));
 	await runLeaves(opts, run);
 	assert.equal(issues[20].state, "CLOSED");
 	assert.match(
 		issues[20].comments.at(-1)?.body ?? "",
-		/^맞다 \(@kim\): main으로 올릴 것은 dev abc123/,
+		/^맞다 \(@kim\): main을 dev abc123로 옮겼다 \(fast-forward, 전 main main0\)/,
 	);
 	assert.equal(issues[5].state, "CLOSED");
+	inOrder(calls, [
+		"git fetch origin dev",
+		"git merge-base --is-ancestor abc123 origin/dev",
+		"git ls-remote origin refs/heads/main",
+		"git -c core.hooksPath=",
+	]);
+	const push = calls.filter((c) => / push /.test(c) && c.includes("main"));
+	assert.equal(push.length, 1);
+	assert.match(push[0], /hooks push origin abc123:refs\/heads\/main$/); // force 없이
+});
+
+test("/맞다인데 main으로 못 올리면(push 거절) 이유를 남기고 닫는다. 다시 열면 다시 시도한다", async () => {
+	const { run, issues } = answered(human("/맞다"));
+	const no: typeof run = async (cmd, args, ...rest) => {
+		if (args.includes("abc123:refs/heads/main"))
+			throw new Error("git -c 실패\n! [rejected] main (non-fast-forward)");
+		return run(cmd, args, ...rest);
+	};
+	await runLeaves(opts, no);
+	assert.equal(issues[20].state, "CLOSED");
+	const done = issues[20].comments.at(-1)?.body ?? "";
+	assert.match(
+		done,
+		/^맞다 \(@kim\): main으로 못 올렸다: main main0에서 dev abc123로 가는 push가 거절됐다/,
+	);
+	assert.match(done, /다시 열면 다시 시도한다/);
 });
 
 test("/아니다: 뿌리에 이유를 남기고(기획 대화로) 보고서 이슈를 닫는다", async () => {
