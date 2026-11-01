@@ -14,6 +14,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { firstLine, type Opts, quiet, type Run } from "./leaf.ts";
 import { noKey } from "./session.ts";
+import type { Tree } from "./tree.ts";
 
 export const TESTS = /\.(accept|contract)\.[cm]?[jt]sx?$/;
 const REPORTER = new URL("./red-reporter.ts", import.meta.url).href;
@@ -58,7 +59,7 @@ export function unquote(p: string): string {
 // git이 내놓은 경로 목록 한 줄에 하나
 export const paths = (out: string) =>
 	out.split("\n").filter(Boolean).map(unquote);
-// own: 이 PR이 고쳐도 되는 계약의 노드(재계획의 병렬 변경만). wait: 위험 경로 대기 댓글 id.
+// own: 이 PR이 고쳐도 되는 계약의 노드(재계획의 병렬 변경과 그 계약 정리 잎만). wait: 위험 경로 대기 댓글 id.
 // 그 뒤에 달린 /승인만 센다. 코드가 바뀌어 다시 평가하면 비운다
 export type Gate = { own?: number; wait?: number };
 // fix가 있으면 고칠 것이 있다는 뜻. stop이면 다시 해도 소용없다(바로 막힘).
@@ -145,7 +146,19 @@ const deps = (pkg: string): string[] => {
 		return [];
 	}
 };
-// 재계획의 병렬 변경은 자기 노드의 계약 테스트(인수 테스트는 아님)를 고치거나 지울 수 있다
+// 계약 정리 표시: 병렬 변경(expand) 재계획이 만든 잎에 하네스가 다는 댓글의 머리. 뒤에 "#<노드>)"
+export const CLEANUP = "계약 정리 (";
+// 잎이 계약 정리 잎이면 고쳐도 되는 계약의 노드. 하네스 계정이 단 댓글만 센다: 세션에는 GitHub 열쇠가 없고,
+// 사람·워크플로가 단 댓글은 작성자가 다르다. 하네스가 세션 글을 옮겨 다는 댓글(재계획 칸 등)은 머리가 다르다
+export const cleanup = (t: Pick<Tree, "comments">, account: string) => {
+	const c = t.comments.find(
+		(c) => c.author.toLowerCase() === account && c.body.startsWith(CLEANUP),
+	);
+	const n = c?.body.slice(CLEANUP.length).match(/^#(\d+)\)/)?.[1];
+	return n ? Number(n) : undefined;
+};
+
+// 재계획의 병렬 변경과 계약 정리 잎은 자기 노드의 계약 테스트(인수 테스트는 아님)를 고치거나 지울 수 있다
 const mine = (f: string, own?: number) =>
 	own !== undefined &&
 	f.startsWith(`contracts/${own}/`) &&
@@ -197,6 +210,7 @@ export function facts(
 
 // 래칫: dev에서 초록이던 계약·인수 테스트는 HEAD에서도 초록이어야 한다. 빨강이 됐거나 사라졌으면 깨진 것이다.
 // 아직 빨강인 건 봐준다. 통과 목록은 저장하지 않고 머지 때마다 dev에서 계산한다.
+// own이면 그 노드의 계약 테스트 중 이 PR이 고치거나 지운 파일만 빼고, 손대지 않은 건 그대로 지킨다
 // push HEAD:dev의 fast-forward가 비교한 dev가 그새 바뀌지 않았음을 보장한다
 export async function ratchet(
 	wt: string,
@@ -213,6 +227,24 @@ export async function ratchet(
 		).filter((f) => TESTS.test(f));
 	const files = await list("origin/dev");
 	if (!files.length) return { broken: [], kept: 0 };
+	const touched = new Set(
+		own === undefined
+			? []
+			: paths(
+					await run(
+						"git",
+						[
+							"diff",
+							"--name-only",
+							"origin/dev",
+							"HEAD",
+							"--",
+							`contracts/${own}`,
+						],
+						wt,
+					),
+				),
+	);
 	const dev = `${wt}-dev`;
 	await quiet(run("git", ["worktree", "remove", "--force", dev], wt));
 	await run("git", ["worktree", "add", "--detach", dev, "origin/dev"], wt);
@@ -224,7 +256,9 @@ export async function ratchet(
 	}
 	const key = (f: string, r: Row) => `${f} › ${r.name}`;
 	const green = [...before].flatMap(([f, rs]) =>
-		mine(f, own) ? [] : rs.filter((r) => r.ok).map((r) => key(f, r)),
+		mine(f, own) && touched.has(f)
+			? []
+			: rs.filter((r) => r.ok).map((r) => key(f, r)),
 	);
 	const now = new Set(await list("HEAD"));
 	const after = await results(

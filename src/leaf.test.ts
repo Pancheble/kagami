@@ -38,6 +38,8 @@ type Issue = {
 };
 
 const now = () => new Date().toISOString();
+// 명세 점검(src/spec.ts)을 통과하는 뿌리 본문. loop는 시작할 때 이걸 센다
+const SPEC = `## 기획 문서\n\ndocs/plan.md\n\n## 성공 기준\n\n- 잎이 머지된다 (확인: dev 로그)\n\n## 위험 경로\n\n없음\n\n## 평가자 준비물\n\n없음\n\n## 스택과 ADR\n\nNode\n\n## 안 할 것\n\n없음\n`;
 
 // 뿌리 #1 아래 잎 #7 하나. 라벨·댓글·담당을 기억하는 가짜 GitHub와 git·claude.
 // 평가 판정, CI, rebase, dev fast-forward 결과는 차례로 꺼내 쓴다(비면 성공)
@@ -162,6 +164,7 @@ function fake(
 							comments: {
 								nodes: i.comments.map((c) => ({
 									databaseId: c.id,
+									author: c.user ? { login: c.user } : null,
 									body: c.body,
 									createdAt: c.created_at,
 									updatedAt: c.updated_at ?? c.created_at,
@@ -255,6 +258,7 @@ function fake(
 				id: id++,
 				created_at: now(),
 				body: at("--body"),
+				user: "pancheble", // 하네스 계정
 			});
 			return "";
 		}
@@ -1321,6 +1325,48 @@ test("기존 계약 테스트를 고친 잎 PR은 막힌다: 머지 없이 막�
 	);
 });
 
+test("계약 정리 잎: 하네스가 단 '계약 정리 (#노드)' 표시가 있으면 그 노드의 옛 계약 테스트를 고치거나 지워도 머지된다", async () => {
+	const { calls, run, issues } = fake({
+		leaf: {
+			comments: [
+				{
+					id: 5,
+					created_at: now(),
+					body: "계약 정리 (#1): 재계획이 붙였다",
+					user: "pancheble",
+				},
+			],
+		},
+		status: ["M\tcontracts/1/add.contract.js\nM\tsrc/add.js"],
+	});
+	assert.deepEqual(await runLeaves(opts, run), [
+		{ issue: 7, pr: 12, outcome: "merged" },
+	]);
+	assert.ok(calls.some((c) => c.startsWith("git push origin HEAD:dev")));
+	assert.ok(!issues[1].labels.includes("replan"));
+});
+
+test("계약 정리 표시가 하네스 계정이 아닌 사람이 단 것이면 표시가 아니다: 지금처럼 막힌다", async () => {
+	const { calls, run, issues } = fake({
+		leaf: {
+			comments: [
+				{
+					id: 5,
+					created_at: now(),
+					body: "계약 정리 (#1): 재계획이 붙였다",
+					user: "someone",
+				},
+			],
+		},
+		status: ["M\tcontracts/1/add.contract.js\nM\tsrc/add.js"],
+	});
+	assert.deepEqual(await runLeaves(opts, run), [
+		{ issue: 7, pr: 12, outcome: "stuck" },
+	]);
+	assert.ok(!calls.some((c) => c.startsWith("git push origin HEAD:dev")));
+	assert.ok(issues[1].labels.includes("replan"));
+});
+
 test("래칫: dev에서 초록이던 계약 테스트가 빨강이 되면 FAIL, 깨진 테스트를 들고 고친다", async () => {
 	const trees = {
 		"origin/dev": ["contracts/1/add.contract.js", "contracts/1/app.accept.js"],
@@ -1479,6 +1525,49 @@ test("재계획의 병렬 변경은 자기 노드의 옛 계약 테스트를 고
 	assert.equal(resplit.splits.length, 2);
 	assert.match(resplit.splits[1], /고치거나 지우지 마/);
 	assert.ok(!resplit.issues[1].labels.includes("stuck-1"));
+});
+
+test("병렬 변경의 계약 정리 잎은 재계획이 표시한다: 새 잎을 만든 뒤 하네스가 '계약 정리 (#노드)'를 단다", async () => {
+	const [a, b] = plan().leaves;
+	const { calls, run, issues } = fake({
+		...signalled,
+		plans: [rp({ action: "expand", leaves: [a, { ...b, cleanup: true }] })],
+	});
+	await runLeaves(splitOpts(), run);
+	// 새 잎은 #9, #10. 계약 정리는 #10만
+	assert.deepEqual(
+		issues[10].comments.filter((c) => c.body.startsWith("계약 정리 (")),
+		[
+			{
+				id: issues[10].comments[0].id,
+				created_at: issues[10].comments[0].created_at,
+				body: "계약 정리 (#1): 재계획(expand)이 만든 잎이다. contracts/1/의 옛 계약 테스트(*.contract.*)를 고치거나 지울 수 있다. 인수 테스트는 아니다",
+				user: "pancheble",
+			},
+		],
+	);
+	assert.ok(!issues[9].comments.some((c) => c.body.startsWith("계약 정리 (")));
+	inOrder(calls, [
+		"gh api repos/o/r/issues/10/dependencies/blocked_by",
+		"gh issue comment 10 -R o/r --body 계약 정리 (#1)",
+		"gh issue edit 1 -R o/r --remove-label replan",
+	]);
+});
+
+test("계약 정리 잎은 병렬 변경(expand)에서만: 다른 재계획이 표시를 달라고 하면 FAIL로 다시 짠다", async () => {
+	const [a, b] = plan().leaves;
+	const { splits, run, issues } = fake({
+		...signalled,
+		plans: [rp({ leaves: [a, { ...b, cleanup: true }] }), rp()],
+	});
+	await runLeaves(splitOpts(), run);
+	assert.equal(splits.length, 2);
+	assert.match(splits[1], /계약 정리 잎은 병렬 변경\(expand\)에서만/);
+	assert.ok(
+		!Object.values(issues).some((i) =>
+			i.comments.some((c) => c.body.startsWith("계약 정리 (")),
+		),
+	);
 });
 
 test("여러 노드의 계약을 고쳤으면 노드마다 재계획 신호", async () => {
@@ -2008,7 +2097,7 @@ test("8의 답을 읽다가 정지 파일이 생기면 부모 닫기도 시작�
 });
 
 test("loop는 할 일이 없을 때까지 한 번 돌기를 되풀이한다", async () => {
-	const { run, issues } = fake({ two: true });
+	const { run, issues } = fake({ two: true, root: { body: SPEC } });
 	assert.deepEqual(await loop(opts, run), [
 		{ issue: 7, pr: 12, outcome: "merged" },
 		{ issue: 8, pr: 12, outcome: "merged" },
@@ -2017,7 +2106,7 @@ test("loop는 할 일이 없을 때까지 한 번 돌기를 되풀이한다", as
 });
 
 test("잎을 하는 동안 정지 파일을 만들면 그 잎은 끝내고, 다음 잎을 시작하지 않는다", async () => {
-	const f = fake({ two: true });
+	const f = fake({ two: true, root: { body: SPEC } });
 	const { ctl, run } = stopAt(f.run, (l) =>
 		l.startsWith("claude -p 너는 구현자"),
 	);
@@ -2028,6 +2117,18 @@ test("잎을 하는 동안 정지 파일을 만들면 그 잎은 끝내고, 다�
 	assert.equal(f.issues[8].state, "OPEN");
 	assert.deepEqual(claims(f.issues[8]), []);
 	assert.equal(count(f.calls, "claude -p 너는 구현자"), 1);
+});
+
+test("loop는 시작할 때 뿌리에 명세 점검을 돌려, 빠진 칸이 있으면 GitHub에 아무것도 쓰지 않고 거부한다", async () => {
+	const { calls, run } = fake({ root: { body: "## 성공 기준\n\n- 된다\n" } });
+	await assert.rejects(loop(opts, run), (e: Error) => {
+		assert.match(e.message, /명세 점검 #1/);
+		assert.match(e.message, /기획 대화\(\/plan-talk\)로 돌아간다/);
+		assert.match(e.message, /- 기획 문서: 칸이 없다/);
+		assert.match(e.message, /- 성공 기준 1 "된다": 확인 방법이 없다/);
+		return true;
+	});
+	assert.deepEqual(calls, ["gh issue view 1 -R o/r --json body --jq .body"]);
 });
 
 test("구현 세션은 그 잎의 방향 수정 파일을 읽는 hook을 받는다", async () => {

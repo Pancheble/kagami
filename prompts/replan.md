@@ -3,7 +3,7 @@
 action으로 셋 중 하나를 고른다:
 
 - resplit: 열린 자식만 다시 쪼갠다. 닫힌 자식의 코드는 되돌리지 않는다. 꼭 빼야 하면 플래그를 끄거나 되돌리는 잎을 만든다.
-- expand: 약속이 틀렸으면 병렬 변경 잎들로 바꾼다. 옛 약속은 두고 새 약속을 옆에 더하는 잎 → 형제들을 새 약속으로 옮기는 잎 → 마지막에 옛 약속을 지우는 잎.
+- expand: 약속이 틀렸으면 병렬 변경 잎들로 바꾼다. 옛 약속은 두고 새 약속을 옆에 더하는 잎 → 형제들을 새 약속으로 옮기는 잎 → 마지막에 옛 약속을 지우는 잎. 마지막 잎은 계약 정리 잎이다: leaves에 `cleanup: true`로 새 잎으로 만든다(rewrite로는 안 된다). 그 잎만 `contracts/{{node}}/`의 옛 계약 테스트를 고치거나 지울 수 있고, 다른 잎이 계약 테스트를 고치면 막힌다. 인수 테스트는 계약 정리 잎도 못 고친다.
 - up: 이 노드 목표 안에서는 안 풀린다. 아무 파일도 바꾸지 말고 why에 이유를 적는다. 한 층 위에서 다시 짠다.
 
 resplit과 expand는 이렇게 한다:
@@ -21,6 +21,6 @@ resplit과 expand는 이렇게 한다:
 - behavior: 이 재계획으로 사용자에게 보이는 동작이 바뀌면 한 줄(예: 비밀번호 로그인 → 매직 링크). 아니면 빈 문자열
 - close: 닫을 열린 자식 번호
 - rewrite: 고쳐 쓸 열린 자식. number와 새 title, goal, promises, test, scope
-- leaves: 새 잎. title, goal, promises, test(`contracts/{{node}}/`의 파일을 돌리는 명령), scope(바뀔 이유 하나 단위로, 다른 잎과 겹치지 않게), waitFor(먼저 닫혀야 하는 새 잎의 번호, 이 목록에서 0부터)
+- leaves: 새 잎. title, goal, promises, test(`contracts/{{node}}/`의 파일을 돌리는 명령), scope(바뀔 이유 하나 단위로, 다른 잎과 겹치지 않게), waitFor(먼저 닫혀야 하는 새 잎의 번호, 이 목록에서 0부터), cleanup(expand의 계약 정리 잎만 true, 아니면 빼거나 false)
 
 {{state}}{{fix}}

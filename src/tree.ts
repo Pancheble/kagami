@@ -8,6 +8,7 @@ import { harness } from "./session.ts";
 type State = "open" | "closed";
 export type Comment = {
 	id: number;
+	author: string; // 단 계정. 지워진 계정이면 ""
 	body: string;
 	createdAt: string;
 	updatedAt: string; // claim 하트비트가 민다
@@ -56,7 +57,7 @@ export async function ensureLabels(repo: string, run: Run) {
 
 // ponytail: 댓글 말고는 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
 const PAGE =
-	"pageInfo { hasNextPage endCursor } nodes { databaseId body createdAt updatedAt }";
+	"pageInfo { hasNextPage endCursor } nodes { databaseId author { login } body createdAt updatedAt }";
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
@@ -69,7 +70,7 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
-// 댓글은 claim과 막힘 이유가 있어 끝까지 읽는다
+// 댓글은 claim과 막힘 이유, 계약 정리 표시가 있어 끝까지 읽는다
 const MORE = `query($owner: String!, $name: String!, $number: Int!, $after: String!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) { comments(first: 100, after: $after) { ${PAGE} } }
@@ -91,6 +92,7 @@ type Page = {
 	pageInfo?: { hasNextPage: boolean; endCursor: string | null };
 	nodes: {
 		databaseId: number;
+		author: { login: string } | null;
 		body: string;
 		createdAt: string;
 		updatedAt: string;
@@ -156,6 +158,7 @@ export async function readTree(
 		scope: scope(i.body),
 		comments: comments.map((c) => ({
 			id: c.databaseId,
+			author: c.author?.login ?? "",
 			body: c.body,
 			createdAt: c.createdAt,
 			updatedAt: c.updatedAt,
