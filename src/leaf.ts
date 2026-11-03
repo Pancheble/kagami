@@ -373,9 +373,13 @@ async function expire(tree: Tree, o: Opts, run: Run): Promise<boolean> {
 	let any = false;
 	for (const t of all(tree)) {
 		if (t.state !== "open") continue;
-		// 만료는 마지막 갱신 기준: 하트비트가 claim 댓글을 고쳐 쓰면 updatedAt이 밀린다
+		// 만료는 마지막 갱신 기준: 하트비트가 claim 댓글을 고쳐 쓰면 updatedAt이 밀린다.
+		// 이 하네스 계정의 claim만 만료된다. 사람은 하트비트를 치지 않으니 사람 claim은 사람이 지울 때까지 간다
 		const old = t.comments.filter(
-			(c) => isClaim(c.body) && Date.parse(c.updatedAt) < cutoff,
+			(c) =>
+				isClaim(c.body) &&
+				c.author.toLowerCase() === o.account &&
+				Date.parse(c.updatedAt) < cutoff,
 		);
 		if (!old.length) continue;
 		const claims = old.map((c) => ({

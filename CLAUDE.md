@@ -24,6 +24,7 @@
 - `src/promote.ts` (main을 옮기는 스크립트: 8 보고서의 /맞다 판정과 main fast-forward)
 - `.claude/settings.json`, `.claude/agents/`
 - `.github/workflows/`
+- `ci/` (대상 저장소에 까는 워크플로. 팀 저장소의 CI가 된다)
 - `prompts/` (세션 역할 프롬프트)
 - `src/session.ts` (세션 인증 제거와 역할마다 거는 권한 플래그)
 - `src/guard.ts` (dev로 가는 유일한 문: 순차 머지와 그 앞의 판정)

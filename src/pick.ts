@@ -1,6 +1,7 @@
 // T3 잎 고르기: 트리 JSON에서 준비된 잎을 집중 노드에서 가까운 순으로 고르고 claim 댓글로 담당을 건다.
 // 실행: node src/pick.ts --harness <봇 계정> --repo owner/name --root <뿌리> [--focus <집중 노드>] [--dial <층 수>] [--workers 1]
 import { parseArgs } from "node:util";
+import { member } from "./guard.ts";
 import { type Run, sh } from "./leaf.ts";
 import { harness } from "./session.ts";
 import { readTree, type Tree } from "./tree.ts";
@@ -35,9 +36,13 @@ export const all = (t: Tree): Tree[] => [t, ...t.children.flatMap(all)];
 export const isClaim = (body: string) =>
 	/^claim: \S+(\n갱신 \S+)?\s*$/.test(body);
 
+// 담당으로 세는 claim: 협업자 이상의 사람 계정(User)이 단 것. 하네스 일꾼과 사람(팀원)이 같은 판정이다.
+// 협업자가 아닌 사람·bot·작성자를 모르는 claim은 세지 않는다
+export const counts = (c: { body: string; type?: string; assoc?: string }) =>
+	isClaim(c.body) && member(c);
+
 // assignee는 claim을 이긴 뒤에야 걸린다. 그 틈에도 담당으로 보려고 claim 댓글도 본다
-const taken = (t: Tree) =>
-	t.assignees.length > 0 || t.comments.some((c) => isClaim(c.body));
+const taken = (t: Tree) => t.assignees.length > 0 || t.comments.some(counts);
 
 // CLI 숫자 인자. min 이상 정수만
 export function num(flag: string, v: string, min: number): number {
@@ -112,9 +117,16 @@ export const unsplit = (tree: Tree, focus: number, dial: number) =>
 	near(tree, focus, dial, (t) => t.kind === "node" && t.children.length === 0);
 
 export type Claim = { leaf: Tree; worker: string; comment: number };
-type Comment = { id: number; created_at: string; body: string };
+type Comment = {
+	id: number;
+	created_at: string;
+	body: string;
+	type: string;
+	assoc: string;
+};
 
 // claim 댓글을 달고 다시 읽어, 가장 먼저 달린 claim(같은 시각이면 작은 댓글 id)이 내 것일 때만 이긴다.
+// 사람 협업자의 claim도 같은 줄에 선다(counts).
 // 지면 내 claim을 지우고 다음 잎으로. assignee는 사람이 보는 표시일 뿐이다
 export async function claim(
 	repo: string,
@@ -144,13 +156,13 @@ export async function claim(
 				"--paginate",
 				`${api}?per_page=100`,
 				"--jq",
-				".[] | {id, created_at, body}",
+				".[] | {id, created_at, body, type: .user.type, assoc: .author_association}",
 			])
 		)
 			.split("\n")
 			.filter(Boolean)
 			.map((l): Comment => JSON.parse(l))
-			.filter((c) => isClaim(c.body))
+			.filter(counts)
 			.sort((a, b) =>
 				a.created_at === b.created_at
 					? a.id - b.id
