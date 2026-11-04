@@ -15,7 +15,7 @@ argument-hint: "[잎 이슈 번호]"
 - 잎 이슈와 부모 이슈를 `gh issue view`로 읽고 잎 제목을 말한다. 번호가 애매하면 묻는다. 다른 PR은 뒤지지 않는다
 - 브랜치는 `leaf/<번호>-<짧은-이름>`이고 dev 위에서 시작한다
 - AGENTS.md "계획 알림 형식"(Where/Why/Scope/Done when/Decide)으로 계획을 보여 준다. `Decide`가 있을 때만 멈추고 답을 기다린다. 없으면 바로 진행한다
-- 테스트할 seam(tdd 스킬의 "Seams")을 `Scope`에 적는다. 계획 알림에 답하면 seam도 합의한 것으로 본다
+- 테스트할 seam(tdd 스킬의 "Seams")을 `Scope`에 적는다. 계획 알림이 멈추지 않고 진행해도(Decide 없음) seam은 합의한 것으로 본다. tdd에서 다시 묻지 않는다
 - `Scope`가 3줄을 넘으면 시작하기 전에 쪼개자고 제안한다
 
 ## 구현
