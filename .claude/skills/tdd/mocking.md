@@ -1,6 +1,6 @@
 # When to Mock
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/mocking.md`.
+> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/mocking.md`. 라이선스 전문: `.claude/skills/LICENSE-mattpocock`.
 > 고친 점: 출처만 더했다. 원문 그대로다.
 
 Mock at **system boundaries** only:

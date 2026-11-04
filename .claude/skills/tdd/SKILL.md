@@ -3,7 +3,7 @@ name: tdd
 description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`.
+> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`. 라이선스 전문: `.claude/skills/LICENSE-mattpocock`.
 > 고친 점: 없는 스킬(`codebase-design`, `code-review`) 의존과 GLOSSARY.md를 빼고, ADR은 뿌리 이슈의 "스택과 ADR", 리팩터링은 평가자 판정 전으로 옮겼다. 나머지는 원문 그대로다.
 
 # Test-Driven Development
