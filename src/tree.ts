@@ -2,7 +2,7 @@
 // 실행: node src/tree.ts --repo owner/name --root <이슈 번호>
 //       node src/tree.ts --harness <봇 계정> --repo owner/name --labels   (상태 라벨 만들기)
 import { parseArgs } from "node:util";
-import { type Run, sh } from "./leaf.ts";
+import { type Run, sh } from "./run.ts";
 import { harness } from "./session.ts";
 
 type State = "open" | "closed";

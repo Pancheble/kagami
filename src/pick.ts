@@ -2,9 +2,11 @@
 // 실행: node src/pick.ts --harness <봇 계정> --repo owner/name --root <뿌리> [--focus <집중 노드>] [--dial <층 수>] [--workers 1]
 import { parseArgs } from "node:util";
 import { member } from "./guard.ts";
-import { type Run, sh } from "./leaf.ts";
+import { num, type Run, sh } from "./run.ts";
 import { harness } from "./session.ts";
 import { readTree, type Tree } from "./tree.ts";
+
+export { num };
 
 const parts = (p: string) => p.split("/").filter((s) => s && s !== ".");
 
@@ -43,13 +45,6 @@ export const counts = (c: { body: string; type?: string; assoc?: string }) =>
 
 // assignee는 claim을 이긴 뒤에야 걸린다. 그 틈에도 담당으로 보려고 claim 댓글도 본다
 const taken = (t: Tree) => t.assignees.length > 0 || t.comments.some(counts);
-
-// CLI 숫자 인자. min 이상 정수만
-export function num(flag: string, v: string, min: number): number {
-	if (!/^\d+$/.test(v) || Number(v) < min)
-		throw new Error(`${flag}는 ${min} 이상의 정수여야 한다: "${v}"`);
-	return Number(v);
-}
 
 // 열림 · 담당 없음 · 재계획 잠금 아님 · want. 잠금은 아래로 번진다
 function collect(

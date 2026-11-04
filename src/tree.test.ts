@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import type { Run } from "./leaf.ts";
+import type { Run } from "./run.ts";
 import { ensureLabels, readTree } from "./tree.ts";
 
 // GraphQL 응답 모양 그대로의 가짜 이슈들

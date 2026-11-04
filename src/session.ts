@@ -1,12 +1,12 @@
 // 세션 권한은 모두 여기: 하네스 자신의 열쇠(봇 계정), claude -p 세션을 띄우는 곳(인증 없는 환경)과 역할마다 거는 CLI 플래그.
 // 위험 경로다(CLAUDE.md의 Risk paths). 역할 프롬프트는 prompts/*.md
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
-import type { Opts, Run } from "./leaf.ts";
+import { noKey, type Opts, type Run } from "./run.ts";
 import { steerFile } from "./steer.ts";
+
+export { noKey };
 
 const EVALUATOR = fileURLToPath(
 	new URL("../.claude/agents/evaluator.md", import.meta.url),
@@ -70,31 +70,6 @@ export async function harness(
 		GIT_COMMITTER_EMAIL: me,
 	});
 	return who.toLowerCase();
-}
-
-// 열쇠를 안 준다: 세션 환경에서 GitHub·git 인증을 뺀다. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
-// 그래서 허용된 node -e로 gh나 git push를 불러도 인증이 없어 실패한다. claude 자신의 로그인은 그대로다.
-// push·PR·이슈·fetch는 하네스만 한다
-export function noKey(): NodeJS.ProcessEnv {
-	const env = { ...process.env };
-	for (const k of [
-		"KAGAMI_BOT_TOKEN",
-		"GH_TOKEN",
-		"GITHUB_TOKEN",
-		"GH_ENTERPRISE_TOKEN",
-		"GITHUB_ENTERPRISE_TOKEN",
-		"SSH_AUTH_SOCK",
-	])
-		delete env[k];
-	return Object.assign(env, {
-		GH_CONFIG_DIR: mkdtempSync(join(tmpdir(), "nokey-")), // 빈 폴더: gh가 로그인을 못 찾는다
-		GIT_TERMINAL_PROMPT: "0",
-		GIT_SSH_COMMAND: "false",
-		// 명령줄 설정으로 credential.helper를 빈 값으로: 앞서 읽은 도우미 목록(키체인 등)을 비운다
-		GIT_CONFIG_COUNT: "1",
-		GIT_CONFIG_KEY_0: "credential.helper",
-		GIT_CONFIG_VALUE_0: "",
-	});
 }
 
 // claude -p 세션은 모두 여기서 띄운다(구현자·평가자·쪼개기·재계획). 권한은 args의 플래그로 건다

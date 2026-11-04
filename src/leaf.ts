@@ -6,10 +6,9 @@
 // 재계획 신호(replan)가 걸린 노드는 아래에 돌고 있는 잎이 없을 때 replan.ts로 다시 짠다
 // 자식이 다 닫힌 노드는 close.ts로 닫고(큰 가지면 8 보고서), 8 보고서에 사람이 단 답을 처리한다
 // 할 일이 없거나 정지 파일(src/stop.ts)이 생길 때까지 한 번 돌기를 되풀이한다. 잎에 방향 수정은 src/steer.ts
-import { execFile } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseArgs, promisify } from "node:util";
+import { parseArgs } from "node:util";
 import { answers, closable, close } from "./close.ts";
 import { cleanup, type Gate, install, merge } from "./guard.ts";
 import {
@@ -18,7 +17,6 @@ import {
 	type Claim,
 	claim,
 	isClaim,
-	num,
 	path,
 	ready,
 	release,
@@ -26,31 +24,16 @@ import {
 	unsplit,
 } from "./pick.ts";
 import { replan } from "./replan.ts";
+import { firstLine, num, type Opts, quiet, type Run, sh } from "./run.ts";
 import { evaluate, harness, implement, session } from "./session.ts";
 import { check, readRoot } from "./spec.ts";
 import { split } from "./split.ts";
 import { CTL, stopped } from "./stop.ts";
 import { readTree, type Tree } from "./tree.ts";
 
-export type Run = (
-	cmd: string,
-	args: string[],
-	cwd?: string,
-	env?: NodeJS.ProcessEnv, // 없으면 하네스 환경 그대로
-) => Promise<string>;
-export type Opts = {
-	repo: string;
-	dir: string;
-	claude: string;
-	workers: number;
-	root: number; // 뿌리 이슈
-	focus: number; // 집중 노드
-	dial: number; // 범위 다이얼
-	account: string; // 하네스 계정(봇, 소문자). claim에 적고, /승인에서 뺀다
-	ttl: number; // 시간. 이보다 오래된 claim은 시도가 끊긴 것으로 본다
-	poll?: number; // ms. 위험 경로 대기에서 /승인을 다시 볼 간격(기본 1분)
-	ctl: string; // 정지·방향 수정 파일 폴더
-};
+// 옮겨 간 공용 함수: 아직 leaf.ts에서 가져오는 파일을 위해 다시 내보낸다
+export { firstLine, type Opts, quiet, type Run, sh };
+
 export type Result = {
 	issue: number;
 	pr: number; // PR을 만들기 전에 막혔으면 0
@@ -99,8 +82,6 @@ export function verdict(report: string): "PASS" | "NEEDS_WORK" {
 		: "NEEDS_WORK";
 }
 
-export const quiet = (p: Promise<unknown>) => p.catch(() => {});
-export const firstLine = (s: string) => s.split("\n")[0];
 export const stuckNotes = (t: Tree) =>
 	t.comments.map((c) => c.body).filter((b) => /^막힘 \d+\/\d+: /.test(b));
 // 시도마다 새 브랜치. 노드는 쪼개기, replan이 걸린 노드는 재계획 브랜치
@@ -528,21 +509,6 @@ function alive(pid: number): boolean {
 		return (e as NodeJS.ErrnoException).code === "EPERM";
 	}
 }
-
-const exec = promisify(execFile);
-export const sh: Run = async (cmd, args, cwd, env) => {
-	try {
-		const p = exec(cmd, args, { cwd, env, maxBuffer: 64 << 20 });
-		p.child.stdin?.end(); // claude -p는 stdin이 열려 있으면 3초 기다린다
-		return (await p).stdout;
-	} catch (e) {
-		const { stdout = "", stderr = "" } = e as {
-			stdout?: string;
-			stderr?: string;
-		};
-		throw new Error(`${cmd} ${args[0]} 실패\n${stderr}${stdout}`);
-	}
-};
 
 if (import.meta.main) {
 	const { values } = parseArgs({

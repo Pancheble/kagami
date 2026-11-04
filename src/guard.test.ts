@@ -21,7 +21,7 @@ import {
 	security,
 	unquote,
 } from "./guard.ts";
-import { type Run, sh } from "./leaf.ts";
+import { type Run, sh } from "./run.ts";
 
 // 진짜 git과 node --test로 돈다. 바깥 node --test가 물려주는 NODE_TEST_CONTEXT가 있으면 안쪽이 리포터를 안 써서 뺀다
 const run: Run = (cmd, args, cwd, env) =>
