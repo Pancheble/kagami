@@ -1,11 +1,10 @@
-// T12 명세 점검(1 뿌리 명세): 기획 대화가 끝날 때 뿌리 이슈에 하네스 형식의 칸이 다 있는지 센다.
-// 세기만 한다: 칸을 채우거나 내용이 맞는지 보지 않는다(내용은 8에서 사람이 본다). 빠지면 기획 대화로 돌아간다.
+// T12 명세 점검: 기획 대화(/plan-talk)가 끝날 때 뿌리 이슈에 뿌리 형식의 칸이 다 있는지 센다.
+// 세기만 한다: 칸을 채우거나 내용이 맞는지 보지 않는다(내용은 큰 가지 확인에서 사람이 본다). 빠지면 기획 대화로 돌아간다.
 // 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목. "없음"은 사람이 정한 답으로 센다. 성공 기준은 목록 한 줄마다
-// "(확인: <방법>)"이 있어야 한다(8에서 평가자가 돌려볼 수 있게)
-// 실행: node src/spec.ts --harness <봇 계정> --repo <대상 저장소> --root <뿌리>. 빠진 게 있으면 종료 코드 1
+// "(확인: <방법>)"이 있어야 한다(큰 가지 확인에서 평가자가 돌려볼 수 있게)
+// 실행: node src/spec.ts --repo <대상 저장소> --root <뿌리> (사람 gh 계정으로 돈다). 빠진 게 있으면 종료 코드 1
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
-import { harness } from "./session.ts";
 
 export const ITEMS = [
 	"기획 문서",
@@ -71,13 +70,11 @@ if (import.meta.main) {
 		options: {
 			repo: { type: "string" },
 			root: { type: "string" },
-			harness: { type: "string" },
 		},
 	});
 	if (!values.repo || !values.root)
 		throw new Error("--repo와 --root가 필요하다");
 	const root = num("--root", values.root, 1);
-	await harness(values.harness, sh);
 	const missing = check(await readRoot(values.repo, root, sh));
 	if (!missing.length) console.log(`명세 점검 #${root}: 다 있다`);
 	else {

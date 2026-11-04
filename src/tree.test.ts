@@ -202,14 +202,26 @@ test("없는 이슈면 번호를 말하며 실패한다", async () => {
 	await assert.rejects(readTree("o/r", 42, run), /#42/);
 });
 
-test("상태 라벨을 덮어쓰기로 만든다", async () => {
+test("노드·잎과 기록 라벨을 덮어쓰기로 만든다", async () => {
 	const calls: string[] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args].join(" "));
 		return "";
 	};
 	await ensureLabels("o/r", run);
-	for (const l of ["node", "leaf", "replan", "stuck-1", "stuck-2", "stuck-3"])
+	const want = [
+		"node",
+		"leaf",
+		"needs-decision",
+		"split",
+		"contract-change",
+		"blocked",
+		"off-recommendation",
+		"spec-gap",
+		"discovered",
+	];
+	assert.equal(calls.length, want.length); // 옛 라벨(replan·human·stuck-*)은 안 만든다
+	for (const l of want)
 		assert.ok(
 			calls.some((c) => c.startsWith(`gh label create ${l} -R o/r`)),
 			l,

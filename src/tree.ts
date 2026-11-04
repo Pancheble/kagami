@@ -1,9 +1,8 @@
 // T2 이슈 구조: 뿌리 이슈에서 하위 이슈와 blocked-by를 따라 트리를 읽어 JSON으로 내놓는다.
 // 실행: node src/tree.ts --repo owner/name --root <이슈 번호>
-//       node src/tree.ts --harness <봇 계정> --repo owner/name --labels   (상태 라벨 만들기)
+//       node src/tree.ts --repo owner/name --labels   (라벨 만들기. 사람 gh 계정으로 돈다)
 import { parseArgs } from "node:util";
 import { type Run, sh } from "./run.ts";
-import { harness } from "./session.ts";
 
 type State = "open" | "closed";
 export type Comment = {
@@ -30,15 +29,18 @@ export type Tree = {
 	children: Tree[];
 };
 
-// 담당은 라벨이 아니라 이슈 assignee로 둔다
+// 담당은 라벨이 아니라 이슈 assignee로 둔다. 기록 라벨은 AGENTS.md "기록 형식"의 표시어와 같다
+// ponytail: 옛 라벨(replan·human·stuck-*)은 목록에서 뺐지만 Tree 필드 계산은 #31까지 남긴다
 const LABELS = [
 	["node", "노드 이슈", "1D76DB"],
 	["leaf", "잎 티켓", "0E8A16"],
-	["replan", "재계획 중: 아래 잎을 고르지 않는다", "D93F0B"],
-	["human", "사람 대기: 사람이 정할 때까지 재계획하지 않는다", "5319E7"],
-	["stuck-1", "막힘 1번", "FBCA04"],
-	["stuck-2", "막힘 2번", "FBCA04"],
-	["stuck-3", "막힘 3번: 재계획 신호", "B60205"],
+	["needs-decision", "사람의 답을 기다린다. 답이 달리면 뗀다", "D93F0B"],
+	["split", "쪼개기 기록", "5319E7"],
+	["contract-change", "자식끼리의 약속이 바뀌었다", "FBCA04"],
+	["blocked", "막혔다. 새 세션에서 처음부터", "B60205"],
+	["off-recommendation", "추천 밖의 일을 골랐다", "C5DEF5"],
+	["spec-gap", "티켓과 부모에 없던 정보가 필요했다", "F9D0C4"],
+	["discovered", "하다가 찾은 새 일", "BFDADC"],
 ];
 
 export async function ensureLabels(repo: string, run: Run) {
@@ -180,14 +182,11 @@ if (import.meta.main) {
 			repo: { type: "string" },
 			root: { type: "string" },
 			labels: { type: "boolean" },
-			harness: { type: "string" },
 		},
 	});
 	if (!values.repo) throw new Error("--repo가 필요하다");
-	if (values.labels) {
-		await harness(values.harness, sh);
-		await ensureLabels(values.repo, sh);
-	} else if (values.root)
+	if (values.labels) await ensureLabels(values.repo, sh);
+	else if (values.root)
 		console.log(
 			JSON.stringify(
 				await readTree(values.repo, Number(values.root), sh),
