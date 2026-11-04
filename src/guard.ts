@@ -16,8 +16,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { firstLine, type Opts, quiet, type Run, sh } from "./leaf.ts";
-import { noKey } from "./session.ts";
+import { firstLine, noKey, type Opts, quiet, type Run, sh } from "./run.ts";
 import type { Tree } from "./tree.ts";
 
 export const TESTS = /\.(accept|contract)\.[cm]?[jt]sx?$/;

@@ -4,8 +4,7 @@
 // "(확인: <방법>)"이 있어야 한다(8에서 평가자가 돌려볼 수 있게)
 // 실행: node src/spec.ts --harness <봇 계정> --repo <대상 저장소> --root <뿌리>. 빠진 게 있으면 종료 코드 1
 import { parseArgs } from "node:util";
-import { type Run, sh } from "./leaf.ts";
-import { num } from "./pick.ts";
+import { num, type Run, sh } from "./run.ts";
 import { harness } from "./session.ts";
 
 export const ITEMS = [
