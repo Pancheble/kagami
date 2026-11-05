@@ -9,10 +9,10 @@ export type Comment = {
 	id: number;
 	author: string; // 단 계정. 지워진 계정이면 ""
 	type?: string; // User · Bot. 모르면 없음
-	assoc?: string; // author_association(OWNER · MEMBER · COLLABORATOR …). claim을 누가 달았나 센다
+	assoc?: string; // author_association(OWNER · MEMBER · COLLABORATOR …)
 	body: string;
 	createdAt: string;
-	updatedAt: string; // claim 하트비트가 민다
+	updatedAt: string;
 };
 export type Tree = {
 	number: number;
@@ -21,16 +21,12 @@ export type Tree = {
 	kind: "node" | "leaf";
 	assignees: string[];
 	blockedBy: { number: number; state: State }[];
-	replan: boolean; // 재계획 중: 아래 잎을 고르지 않는다
-	human: boolean; // 사람 대기: 사람이 라벨을 뗄 때까지 재계획하지 않는다
-	stuck: number; // 막힘 횟수
 	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
-	comments: Comment[]; // claim과 막힘 이유를 읽는다
+	comments: Comment[]; // 기록(needs-decision·blocked 등)과 활동을 읽는다
 	children: Tree[];
 };
 
 // 담당은 라벨이 아니라 이슈 assignee로 둔다. 기록 라벨은 AGENTS.md "기록 형식"의 표시어와 같다
-// ponytail: 옛 라벨(replan·human·stuck-*)은 목록에서 뺐지만 Tree 필드 계산은 #31까지 남긴다
 const LABELS = [
 	["node", "노드 이슈", "1D76DB"],
 	["leaf", "잎 티켓", "0E8A16"],
@@ -74,7 +70,7 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
-// 댓글은 claim과 막힘 이유, 계약 정리 표시가 있어 끝까지 읽는다
+// 댓글은 기록이 있어 끝까지 읽는다
 const MORE = `query($owner: String!, $name: String!, $number: Int!, $after: String!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) { comments(first: 100, after: $after) { ${PAGE} } }
@@ -154,12 +150,6 @@ export async function readTree(
 			number: b.number,
 			state: lower(b.state),
 		})),
-		replan: labels.includes("replan"),
-		human: labels.includes("human"),
-		stuck: Math.max(
-			0,
-			...labels.map((l) => Number(l.match(/^stuck-(\d+)$/)?.[1] ?? 0)),
-		),
 		scope: scope(i.body),
 		comments: comments.map((c) => ({
 			id: c.databaseId,

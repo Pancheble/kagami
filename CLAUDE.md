@@ -15,15 +15,12 @@
 
 # Risk paths (여기 걸리면 동작 시나리오를 써서 사람 승인)
 
-- `src/promote.ts` (main을 옮기는 스크립트: 8 보고서의 /맞다 판정과 main fast-forward)
 - `.claude/settings.json`, `.claude/agents/`
 - `.github/workflows/`
 - `ci/` (대상 저장소에 까는 워크플로. 팀 저장소의 CI가 된다)
-- `prompts/` (세션 역할 프롬프트)
-- `src/session.ts` (세션 인증 제거와 역할마다 거는 권한 플래그)
-- `src/run.ts` (명령 실행 sh와 세션 인증 제거 noKey의 구현)
-- `src/guard.ts` (dev로 가는 유일한 문: 순차 머지와 그 앞의 판정)
-- `hooks/` (구현 세션에 거는 hook 스크립트. 도구 호출을 막을 수 있다. main push를 막는 git pre-push hook)
+- `src/run.ts` (명령 실행 sh와, 가드가 대상 저장소 코드를 인증 없이 돌리는 noKey)
+- `src/guard.ts` (CI 가드: PR마다 계약 수정·래칫·위험 경로를 판정해 빨강·초록·표시로 보인다)
+- `hooks/` (main push를 막는 git pre-push hook)
 - 이 목록 자체 (백틱으로 적은 경로만 사실 계산이 읽는다. 목록이 바뀌면 그것도 위험 경로로 센다)
 
 # Rules
