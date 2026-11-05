@@ -22,7 +22,7 @@
 7. **구현:** `/implement`로 테스트부터 쓴다. 명세에 없는 애매한 부분은 그 자리에서 묻는다
 8. **평가:** 평가자 에이전트(`.claude/agents/evaluator.md`, 쓰기 권한 없음)에게 끝 기준, 범위, TL;DR을 판정받는다. FAIL이면 고치고 다시. 3번 FAIL이면 멈추고 사람에게 알린다
 9. **PR:** 아래 "커밋과 PR"대로 제목을 달고, 맨 위에 TL;DR을 달아 dev로 연다
-10. **머지:** CI가 초록이면 TL;DR을 보여 주고, 사람이 동의하면 `gh pr merge --squash`로 머지한다
+10. **머지:** CI가 초록이면 TL;DR을 보여 주고, 사람이 동의하면 `gh pr merge --squash --subject "<PR 제목> (#<PR 번호>)"`로 머지한다
 11. **기록하고 끝내기:** 아래 "끝내기 전에"를 하고, "클리어해도 돼요"라고 알린다
 
 ## 세션을 열면
@@ -77,7 +77,7 @@ Decide: (있을 때만) 선택지 2~3개, 좋은 점/대가, 추천 하나
 ```markdown
 Where: <뿌리> › <큰 가지> › #<번호>
 What: 한 것 (3줄 안)
-Changed: new issues / plan changes / contract changes / risk paths touched / new dependencies
+Changed: new issues / plan changes / contract changes / risk paths touched / new dependencies / deleted tests
 Decided: 혼자 정한 것과 이유만
 ```
 
