@@ -360,8 +360,21 @@ test("한글 이름의 계약 테스트도 고치면 잡고, 래칫도 지킨다
 });
 
 // CI의 가드: 같은 판정(judge)을 대상 저장소의 PR 체크아웃에서 돌린다. GitHub에 쓰지 않고 보여 주기만 한다
-const ci = (dir: string) => {
-	const summary = join(mkdtempSync(join(tmpdir(), "summary-")), "s.md");
+// pr: CI가 GITHUB_EVENT_PATH로 주는 pull_request payload의 라벨과 본문
+const ci = (dir: string, pr?: { labels: string[]; body: string }) => {
+	const tmp = mkdtempSync(join(tmpdir(), "summary-"));
+	const summary = join(tmp, "s.md");
+	const event = join(tmp, "event.json");
+	if (pr)
+		writeFileSync(
+			event,
+			JSON.stringify({
+				pull_request: {
+					labels: pr.labels.map((name) => ({ name })),
+					body: pr.body,
+				},
+			}),
+		);
 	const r = spawnSync(
 		"env",
 		[
@@ -371,7 +384,10 @@ const ci = (dir: string) => {
 			"GH_TOKEN",
 			"-u",
 			"GITHUB_TOKEN",
+			"-u",
+			"GITHUB_EVENT_PATH",
 			`GITHUB_STEP_SUMMARY=${summary}`,
+			...(pr ? [`GITHUB_EVENT_PATH=${event}`] : []),
 			process.execPath,
 			new URL("./guard.ts", import.meta.url).pathname,
 			"--dir",
@@ -386,7 +402,7 @@ const ci = (dir: string) => {
 	};
 };
 
-test("CI 가드: 기존 계약 테스트를 고친 PR은 머지 단계와 같은 판정으로 막힘을 보이고 체크가 빨강이다", async () => {
+test("CI 가드: 기존 계약 테스트를 고친 PR은 막힘을 보이고 체크가 빨강이다", async () => {
 	const { dir, commit } = await repo();
 	await commit({
 		"contracts/16/mul.contract.js": contract("mul", "느슨하게 고침"),
@@ -414,7 +430,7 @@ test("CI 가드: 래칫이 깨진 PR도 막힘, 안 깨뜨렸으면 통과(초�
 	assert.match(b.out, /래칫: dev에서 초록 4개 중 깨진 것: 없음/);
 });
 
-test("CI 가드: 위험 경로를 건드린 PR은 사람 승인 대기를 경고로 보인다(체크는 초록, 승인과 머지는 하네스에서만)", async () => {
+test("CI 가드: 위험 경로를 건드린 PR은 초록에 경고로 사람이 볼 것을 보인다", async () => {
 	const { dir, commit } = await repo();
 	await commit({ "CLAUDE.md": "# Risk paths\n\n- `ci/`\n" });
 	const base = await sh("git", ["rev-parse", "HEAD"], dir);
@@ -422,7 +438,66 @@ test("CI 가드: 위험 경로를 건드린 PR은 사람 승인 대기를 경고
 	await commit({ "ci/guard.yml": "x\n" });
 	const r = ci(dir);
 	assert.equal(r.code, 0, r.out);
-	assert.match(r.out, /^지키는 검사: 사람 승인 대기/m);
+	assert.match(r.out, /^지키는 검사: 사람 승인 대기 — /m);
 	assert.match(r.out, /^::warning::/m);
+	assert.doesNotMatch(r.out, /\/승인/);
 	assert.match(r.out, /위험 경로:\n {2}- ci\/guard\.yml/);
+});
+
+// 계약 정리: 기존 계약을 고치는 PR. mul의 테스트 이름을 바꾸면 dev에서 초록이던 이름이 사라진다(래칫이 볼 일)
+const tidy = {
+	"contracts/16/mul.contract.js": contract("곱셈", "이름을 바꿈"),
+};
+const TLDR =
+	"Where: #22 › #40\nChanged: new issues 없음 / plan changes (직접) / contract changes contracts/16/mul.contract.js / risk paths touched 없음\n";
+
+test("CI 가드: contract-change 라벨과 TL;DR Changed에 그 파일이 둘 다 있으면 계약 수정은 표시만 하고 초록이다", async () => {
+	const { dir, commit } = await repo();
+	await commit(tidy);
+	const r = ci(dir, { labels: ["leaf", "contract-change"], body: TLDR });
+	assert.equal(r.code, 0, r.out);
+	assert.match(r.out, /^지키는 검사: 사람 승인 대기 — /m);
+	assert.match(r.out, /계약 정리:\n {2}- contracts\/16\/mul\.contract\.js/);
+	assert.match(r.out, /^::warning::/m);
+	// 고친 파일만 래칫에서 빠지고, 손대지 않은 old 계약 둘은 지킨다
+	assert.match(r.out, /래칫: dev에서 초록 2개 중 깨진 것: 없음/);
+});
+
+test("CI 가드: 계약 수정에 라벨이나 TL;DR 중 하나라도 없으면 막힘(빨강)", async () => {
+	const { dir, commit } = await repo();
+	await commit(tidy);
+	for (const pr of [
+		{ labels: ["contract-change"], body: "Changed: contract changes 없음\n" },
+		{ labels: ["leaf"], body: TLDR },
+		undefined, // 이벤트 없음(로컬 실행)
+	]) {
+		const r = ci(dir, pr);
+		assert.equal(r.code, 1, r.out);
+		assert.match(
+			r.out,
+			/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/mul\.contract\.js/m,
+		);
+	}
+});
+
+test("CI 가드: 라벨과 TL;DR이 있어도 Changed에 적지 않은 계약, 인수 테스트는 막는다", async () => {
+	const other = await repo();
+	await other.commit({
+		...tidy,
+		"contracts/16/old.contract.js": contract("old", "몰래 고침"),
+	});
+	const a = ci(other.dir, { labels: ["contract-change"], body: TLDR });
+	assert.equal(a.code, 1, a.out);
+	assert.match(
+		a.out,
+		/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/old\.contract\.js$/m,
+	);
+	const accept = await repo();
+	await accept.commit({ "contracts/16/sq.accept.js": "// 지움\n" });
+	const b = ci(accept.dir, {
+		labels: ["contract-change"],
+		body: "Changed: contract changes contracts/16/sq.accept.js\n",
+	});
+	assert.equal(b.code, 1, b.out);
+	assert.match(b.out, /^지키는 검사: 막힘 — .*sq\.accept\.js/m);
 });

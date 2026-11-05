@@ -1,24 +1,24 @@
-# kagami 가드: 하네스의 순차 머지와 같은 판정(kagami src/guard.ts judge)을 팀원이 연 PR에도 보여 준다.
-# 대상 저장소(팀 저장소)에 까는 워크플로다. kagami 저장소 자신의 CI(.github/workflows/ci.yml)와는 다르다.
-# 보여 주기만 한다: 읽기 토큰만 쓰고 GitHub에 아무것도 쓰지 않는다. dev로 머지하는 문은 하네스의 순차 머지 하나다.
-# PR이 이 파일을 고치면 결과도 바뀐다(pull_request는 PR 쪽 워크플로로 돈다). 그래서 이 결과는 문이 아니다.
+# kagami 가드: kagami src/guard.ts judge를 대상 저장소(팀 저장소)의 PR마다 돌려 빨강·초록·표시로 보인다.
+# kagami 저장소 자신의 CI(.github/workflows/ci.yml)와는 다르다. 읽기 토큰만 쓰고 GitHub에 아무것도 쓰지 않는다.
+# dev 머지는 CI 초록 + TL;DR + 사람의 동의일 때만 한다(AGENTS.md). PR이 이 파일을 고치면 결과도 바뀐다
+# (pull_request는 PR 쪽 워크플로로 돈다). 그래서 사람이 머지 전에 이 파일의 diff를 본다.
+# 계약 정리: contract-change 라벨과 본문 TL;DR의 Changed 줄을 이벤트 payload에서 읽는다. 라벨·본문을 바꾸면 다시 돈다
 #
 # 까는 법(사람이 한다. 대상 저장소에서도 .github/workflows/는 위험 경로다):
 #   1. 이 파일을 대상 저장소의 .github/workflows/kagami-guard.yml로 복사해 사람 PR로 dev에 넣는다
-#   2. 저장소 변수 KAGAMI_HARNESS = 하네스 계정(예: pancheble-bot). 하네스가 연 PR은 하네스가 머지 단계에서 판정하니 건너뛴다
-#   3. 저장소 비밀 KAGAMI_READ_TOKEN = Pancheble/kagami만 Contents: Read인 fine-grained 토큰(kagami가 비공개라서)
+#   2. 저장소 비밀 KAGAMI_READ_TOKEN = Pancheble/kagami만 Contents: Read인 fine-grained 토큰(kagami가 비공개라서)
 name: kagami guard
 
 on:
   pull_request:
     branches: [dev]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
 
 permissions:
   contents: read
 
 jobs:
   guard:
-    if: github.event.pull_request.user.login != vars.KAGAMI_HARNESS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
