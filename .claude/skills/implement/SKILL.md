@@ -6,14 +6,14 @@ argument-hint: "[잎 이슈 번호]"
 ---
 
 > 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/implement/SKILL.md`. 라이선스 전문: `.claude/skills/LICENSE-mattpocock`.
-> 고친 점: `/code-review`를 평가자 에이전트 판정으로 바꾸고, AGENTS.md의 계획 알림·멈춤 조건·PR 형식에 맞췄다.
+> 고친 점: `/code-review`를 평가자 에이전트 판정으로 바꾸고, AGENTS.md의 계획 알림·멈춤 조건·PR 형식에 맞췄다. 시작할 때 `leaf/<번호>-` 브랜치로 옮기는 단계를 넣었다.
 
 사람이 부르는 스킬이다. 사람이 준 잎 이슈를 구현한다. 규칙은 `AGENTS.md`가 기준이고, 여기는 구현 단계(AGENTS.md "한 번 일하는 순서" 6~9)를 한 자리에 모은 것이다.
 
 ## 시작
 
 - 잎 이슈와 부모 이슈를 `gh issue view`로 읽고 잎 제목을 말한다. 번호가 애매하면 묻는다. 다른 PR은 뒤지지 않는다
-- 브랜치는 `leaf/<번호>-<짧은-이름>`이고 dev 위에서 시작한다
+- 지금 브랜치가 `leaf/<번호>-`로 시작하지 않으면(앱이 만든 `claude/...` 등) `git fetch origin && git switch -c leaf/<번호>-<짧은-이름> origin/dev`로 옮긴다. 그래야 `node src/changed.ts`가 `--issue` 없이 잎 번호를 읽는다
 - AGENTS.md "계획 알림 형식"(Where/Why/Scope/Done when/Decide)으로 계획을 보여 준다. `Decide`가 있을 때만 멈추고 답을 기다린다. 없으면 바로 진행한다
 - 테스트할 seam(tdd 스킬의 "Seams")을 `Scope`에 적는다. 계획 알림이 멈추지 않고 진행해도(Decide 없음) seam은 합의한 것으로 본다. tdd에서 다시 묻지 않는다
 - `Scope`가 3줄을 넘으면 시작하기 전에 쪼개자고 제안한다
