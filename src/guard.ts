@@ -1,15 +1,15 @@
-// T7 지키는 장치: 순차 머지(merge)는 dev로 가는 유일한 문이고, 문을 열기 전에 하네스가 판정한다.
-// 판정은 PR이 아니라 하네스의 코드로 한다. 그래서 PR이 워크플로를 고쳐도 피할 수 없다.
-// 무료 개인 비공개 저장소에서는 브랜치 보호와 룰셋을 못 쓴다(403). 이 파일은 위험 경로다(CLAUDE.md의 Risk paths).
-// rebase한 HEAD를 origin/dev와 비교한다:
-//   계약 테스트 수정 감지: 기존 계약·인수 테스트를 고치거나 지웠으면 막고, 그 계약을 정한 노드로 보낸다
+// CI 가드: PR 체크아웃의 HEAD(PR을 dev에 얹은 커밋)를 origin/dev와 비교해 판정(judge)하고 결과를 체크로 보인다.
+// dev로 가는 문은 사람의 머지 동의다(AGENTS.md). 가드는 그 앞에 빨강·초록·표시를 보인다. 이 파일은 위험 경로다(CLAUDE.md의 Risk paths).
+//   계약 테스트 수정 감지: 기존 계약·인수 테스트를 고치거나 지웠으면 막는다.
+//     계약 정리: PR에 contract-change 라벨이 있고 본문 TL;DR의 Changed 줄에 그 계약 파일(*.contract.*)이 적혀 있으면 막지 않고 표시한다
 //   래칫: dev에서 초록이던 계약·인수 테스트가 HEAD에서 빨강이거나 사라졌으면 FAIL
 //   사실 계산: 위험 경로(dev의 CLAUDE.md 목록), 지운 테스트, 새 의존성을 센다
 //   보안 계산 검사: 바뀐 코드를 Biome security 규칙으로 본다
-// 판정은 PR 댓글로 남긴다. 위험 경로·지운 테스트·보안 지적이 있으면 CI 뒤에 사람의 /승인을 기다린다
-// 같은 판정(judge)을 대상 저장소의 CI 잡(ci/guard.yml)에서도 돌려 팀원이 연 PR에 보인다. CI는 보여 주기만 한다:
-// GitHub에 쓰지 않고(읽기 토큰), 판정을 문으로 쓰지 않는다. PR이 워크플로를 고치면 CI 결과는 바뀌니 dev로 가는 문은 merge 하나다.
-// 실행(CI): node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
+// 계약 정리·위험 경로·지운 테스트·보안 지적은 초록에 표시(경고)로 사람에게 보인다. GitHub에 쓰지 않는다(읽기 토큰)
+// 실행: node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
+//   라벨과 본문은 GITHUB_EVENT_PATH의 pull_request payload에서 읽는다. 로컬에선 같은 모양의 JSON 파일을 그 변수로 준다
+// ponytail: merge·approve·waitChecks·said·byHuman·member·cleanup·CLEANUP·Gate·own은 자율 코드(leaf·split·promote·replan·pick)만 쓴다.
+// #31이 그 파일들을 아카이브할 때 같이 지운다
 import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -215,10 +215,12 @@ export function facts(
 // 아직 빨강인 건 봐준다. 통과 목록은 저장하지 않고 머지 때마다 dev에서 계산한다.
 // own이면 그 노드의 계약 테스트 중 이 PR이 고치거나 지운 파일만 빼고, 손대지 않은 건 그대로 지킨다
 // push HEAD:dev의 fast-forward가 비교한 dev가 그새 바뀌지 않았음을 보장한다
+// skip: 계약 정리로 고친 파일. 그 파일만 빼고 나머지는 지킨다
 export async function ratchet(
 	wt: string,
 	run: Run,
 	own?: number,
+	skip: string[] = [],
 ): Promise<{ broken: string[]; kept: number }> {
 	const list = async (ref: string) =>
 		paths(
@@ -260,7 +262,7 @@ export async function ratchet(
 	}
 	const key = (f: string, r: Row) => `${f} › ${r.name}`;
 	const green = [...before].flatMap(([f, rs]) =>
-		mine(f, own) && touched.has(f)
+		(mine(f, own) && touched.has(f)) || skip.includes(f)
 			? []
 			: rs.filter((r) => r.ok).map((r) => key(f, r)),
 	);
@@ -318,8 +320,22 @@ export async function security(
 const items = (xs: string[]) =>
 	xs.length ? xs.map((x) => `\n  - ${x}`).join("") : " 없음";
 
-// 판정: 막힘(fail)이면 머지하지 않는다. wait면 CI 뒤에 /승인을 기다린다. report는 PR 댓글 본문
-export async function judge(wt: string, run: Run, own?: number) {
+// PR의 라벨과 본문(GITHUB_EVENT_PATH의 pull_request)
+export type Pr = { labels: string[]; body: string };
+// 계약 정리로 허가된 파일: contract-change 라벨이 있고, 본문의 Changed: 줄에 그 경로가 낱말로 적힌 계약 테스트. 인수 테스트는 아니다
+export const allowed = (contracts: string[], pr?: Pr) => {
+	if (!pr?.labels.includes("contract-change")) return [];
+	const words = new Set(
+		pr.body
+			.split("\n")
+			.filter((l) => /^\s*Changed:/.test(l))
+			.flatMap((l) => l.split(/[\s,]+/)),
+	);
+	return contracts.filter((f) => /\.contract\./.test(f) && words.has(f));
+};
+
+// 판정: 막힘(fail)이면 빨강. wait면 초록에 사람이 볼 것을 표시한다. report는 로그와 잡 요약 본문
+export async function judge(wt: string, run: Run, own?: number, pr?: Pr) {
 	const show = (ref: string, f: string) =>
 		run("git", ["show", `${ref}:${f}`], wt).catch(() => "");
 	const status = await run(
@@ -343,39 +359,43 @@ export async function judge(wt: string, run: Run, own?: number) {
 		.split("\n")
 		.filter((l) => l && !l.startsWith("D"))
 		.map((l) => unquote(l.split("\t")[1]));
-	// 계약을 고쳤으면 막힌다. 래칫은 돌리지 않는다
-	const r = f.contracts.length
+	const tidy = allowed(f.contracts, pr);
+	const bad = f.contracts.filter((c) => !tidy.includes(c));
+	// 허가 없이 계약을 고쳤으면 막힌다. 래칫은 돌리지 않는다
+	const r = bad.length
 		? { broken: [], kept: 0 }
-		: await ratchet(wt, run, own);
+		: await ratchet(wt, run, own, tidy);
 	const sec = await security(changed, wt, run);
 	let fail: Failed | undefined;
-	if (f.contracts.length) {
+	if (bad.length) {
 		const diff = await run(
 			"git",
-			["diff", "origin/dev", "HEAD", "--", ...f.contracts],
+			["diff", "origin/dev", "HEAD", "--", ...bad],
 			wt,
 		);
 		fail = {
-			why: `기존 계약·인수 테스트를 고쳤다: ${f.contracts.join(", ")}`,
-			fix: `기존 계약·인수 테스트(${f.contracts.join(", ")})는 고치거나 지우지 마. 약속을 깨야 하면 그 계약을 정한 노드의 재계획이 정한다\n\n${diff}`,
+			why: `기존 계약·인수 테스트를 고쳤다: ${bad.join(", ")}`,
+			fix: `기존 계약·인수 테스트(${bad.join(", ")})는 고치거나 지우지 마. 계약 정리면 PR에 contract-change 라벨을 달고 TL;DR Changed에 그 파일을 적는다\n\n${diff}`,
 			stop: true,
-			owners: [...new Set(f.contracts.map(ownerOf))].filter(Boolean),
+			owners: [...new Set(bad.map(ownerOf))].filter(Boolean),
 		};
 	} else if (r.broken.length)
 		fail = {
 			why: `래칫: dev에서 초록이던 계약·인수 테스트가 깨졌다 (${r.broken.length}개)`,
 			fix: `dev에서 초록이던 계약·인수 테스트가 빨강이 됐거나 사라졌다. 고쳐:${items(r.broken)}`,
 		};
-	const wait = !fail && f.risk.length + f.deleted.length + sec.length > 0;
+	const wait =
+		!fail && tidy.length + f.risk.length + f.deleted.length + sec.length > 0;
 	const word = fail
 		? `막힘 — ${fail.why}`
 		: wait
-			? "사람 승인 대기 — 위험 경로·지운 테스트·보안 지적이 있다. 하네스 계정이 아닌 사람이 이 PR에 /승인 댓글을 달면 머지한다"
+			? "사람 승인 대기 — 계약 정리·위험 경로·지운 테스트·보안 지적이 있다. 체크는 초록이고, 사람이 보고 머지를 정한다"
 			: "통과";
 	const report = [
 		`지키는 검사: ${word}`,
 		"",
-		`- 계약·인수 테스트 수정:${items(f.contracts)}`,
+		`- 계약·인수 테스트 수정:${items(bad)}`,
+		`- 계약 정리:${items(tidy)}`,
 		`- 래칫: dev에서 초록 ${r.kept}개 중 깨진 것:${items(r.broken)}`,
 		`- 위험 경로:${items(f.risk)}`,
 		`- 지운 테스트:${items(f.deleted)}`,
@@ -514,19 +534,24 @@ export async function merge(
 	}
 }
 
-// CI 잡: 머지 단계와 같은 judge를 PR 체크아웃(HEAD = PR을 dev에 얹은 커밋)에서 돌려 결과를 로그와 잡 요약에 보인다.
-// 막힘이면 체크가 빨강, 대기면 경고만(/승인과 머지는 하네스의 merge에서). own(계약 정리 잎)은 하네스 PR에만 있어 CI는 안 본다
+// CI 잡: judge를 PR 체크아웃에서 돌려 결과를 로그와 잡 요약에 보인다. 막힘이면 체크가 빨강, 표시면 초록에 경고
 if (import.meta.main) {
 	const { values } = parseArgs({
 		options: { dir: { type: "string", default: "." } },
 	});
-	const j = await judge(resolve(values.dir), sh);
+	const ev = process.env.GITHUB_EVENT_PATH;
+	const p = ev && JSON.parse(readFileSync(ev, "utf8")).pull_request;
+	const pr: Pr | undefined = p && {
+		labels: (p.labels ?? []).map((l: { name: string }) => l.name),
+		body: p.body ?? "",
+	};
+	const j = await judge(resolve(values.dir), sh, undefined, pr);
 	console.log(j.report);
 	if (process.env.GITHUB_STEP_SUMMARY)
 		appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${j.report}\n`);
 	if (j.fail) process.exitCode = 1;
 	else if (j.wait)
 		console.log(
-			"::warning::kagami 가드: 하네스였다면 사람 /승인을 기다릴 PR이다 (위험 경로·지운 테스트·보안 지적)",
+			"::warning::kagami 가드: 사람이 볼 것이 있다 (계약 정리·위험 경로·지운 테스트·보안 지적)",
 		);
 }
