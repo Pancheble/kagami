@@ -41,7 +41,7 @@ argument-hint: "[노드 이슈 번호] [대상 저장소 owner/name]"
 
 1. 약속마다 스텁: 모양만 있고 몸통은 `throw new Error("not implemented")`. 저장소의 언어와 폴더 구조를 따른다
 2. `contracts/<노드>/`에 테스트: 약속마다 `이름.contract.<확장자>`, 노드 목표를 확인하는 인수 테스트 `이름.accept.<확장자>`. 파일 이름에 `.test.`를 넣지 않는다(기본 테스트가 빨강을 집어 CI가 깨진다)
-3. 처음엔 빨강인지 파일마다 `node --test <파일>`로 본다. 테스트 하나하나가 스텁의 "not implemented"로 실패해야 한다. 불러오기 실패, 문법 에러, 테스트 없음, 통과가 하나라도 있으면 고친다
+3. 처음엔 빨강인지 파일마다 `node --test <파일>`로 본다. 테스트 하나하나가 스텁의 "not implemented"로 실패해야 한다. 불러오기 실패, 문법 에러, 테스트 없음, 통과가 하나라도 있으면 고친다. "던진다"를 확인하는 테스트는 스텁도 던지니 통과한다. 에러 종류나 메시지까지 확인한다
 4. PR을 dev로 연다. 제목 `test: #<노드> <노드 이름> 계약`, 본문 맨 위 TL;DR(AGENTS.md "PR TL;DR 형식", Changed는 대상 저장소 체크아웃에서 `node <kagami>/src/changed.ts --issue <노드>`), 빨강 확인 결과, `Refs #<노드>`. 노드는 닫지 않으니 `Closes`를 쓰지 않는다
 5. CI가 초록이면 사람에게 머지 동의를 받고 `gh pr merge --squash`로 머지한다
 
