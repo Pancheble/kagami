@@ -29,7 +29,7 @@ argument-hint: "[잎 이슈 번호]"
 
 - 슬라이스가 다 초록이면 리팩터링하고 `npm run check`를 다시 돌린다
 - 끝나면 평가자 에이전트(`.claude/agents/evaluator.md`, 쓰기 권한 없음)에게 끝 기준, 범위, TL;DR 초안을 주고 판정받는다
-- NEEDS_WORK면 고치고 다시 판정받는다. 3번 NEEDS_WORK면 멈추고 사람에게 알린다(AGENTS.md "막혔을 때")
+- FAIL이면 고치고 다시 판정받는다. 3번 FAIL이면 멈추고 사람에게 알린다(AGENTS.md "막혔을 때")
 
 ## 커밋과 PR
 
