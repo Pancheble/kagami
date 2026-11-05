@@ -57,6 +57,7 @@ if (import.meta.main) {
 	const sub = nums(
 		await sh("gh", [
 			"api",
+			"--paginate",
 			`repos/{owner}/{repo}/issues/${n}/sub_issues`,
 			"--jq",
 			".[].number",
