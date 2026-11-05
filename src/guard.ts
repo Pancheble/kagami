@@ -8,24 +8,18 @@
 // 계약 정리·위험 경로·지운 테스트·보안 지적은 초록에 표시(경고)로 사람에게 보인다. GitHub에 쓰지 않는다(읽기 토큰)
 // 실행: node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
 //   라벨과 본문은 GITHUB_EVENT_PATH의 pull_request payload에서 읽는다. 로컬에선 같은 모양의 JSON 파일을 그 변수로 준다
-// ponytail: merge·approve·waitChecks·said·byHuman·member·cleanup·CLEANUP·Gate·own은 자율 코드(leaf·split·promote·replan·pick)만 쓴다.
-// #31이 그 파일들을 아카이브할 때 같이 지운다
 import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { firstLine, noKey, type Opts, quiet, type Run, sh } from "./run.ts";
-import type { Tree } from "./tree.ts";
+import { noKey, quiet, type Run, sh } from "./run.ts";
 
 export const TESTS = /\.(accept|contract)\.[cm]?[jt]sx?$/;
 const REPORTER = new URL("./red-reporter.ts", import.meta.url).href;
 const BIOME = fileURLToPath(
 	new URL("../node_modules/.bin/biome", import.meta.url),
 );
-const POLL = 60_000;
-const HUMAN = ["OWNER", "MEMBER", "COLLABORATOR"]; // author_association
 
 export type Row = { name: string; ok: boolean; error: string };
 
@@ -62,19 +56,10 @@ export function unquote(p: string): string {
 // git이 내놓은 경로 목록 한 줄에 하나
 export const paths = (out: string) =>
 	out.split("\n").filter(Boolean).map(unquote);
-// own: 이 PR이 고쳐도 되는 계약의 노드(재계획의 병렬 변경과 그 계약 정리 잎만). wait: 위험 경로 대기 댓글 id.
-// 그 뒤에 달린 /승인만 센다. 코드가 바뀌어 다시 평가하면 비운다
-export type Gate = { own?: number; wait?: number };
-// fix가 있으면 고칠 것이 있다는 뜻. stop이면 다시 해도 소용없다(바로 막힘).
-// owners는 깨는 변경 제안: 그 계약들을 정한 노드에서 재계획한다
-export type Failed = {
-	why: string;
-	fix?: string;
-	stop?: boolean;
-	owners?: number[];
-};
+// 막힘의 이유
+export type Failed = { why: string };
 
-// 대상 저장소의 의존성을 worktree에 깐다. 테스트를 돌리는 곳(results)과 세션이 쓰는 worktree는 모두 이 길로 간다.
+// 대상 저장소의 의존성을 worktree에 깐다. 테스트를 돌리는 곳(results)은 모두 이 길로 간다.
 // 대상 저장소의 코드를 받는 일이라 인증 없는 환경에서, 설치 스크립트(lifecycle)는 돌리지 않는다.
 // lock 파일대로만 깐다(npm ci). 못 깔면 던진다: 판정할 수 없는 걸 통과로 보지 않는다
 // ponytail: npm의 package-lock.json만. pnpm·yarn이나 lock 없는 저장소는 안 깐다(불러오기 실패로 빨강)
@@ -89,8 +74,8 @@ export async function install(wt: string, run: Run) {
 }
 
 // 계약·인수 테스트 파일마다 node --test를 따로 돌려 테스트 하나하나의 결과를 읽는다. 결과는 리포터가 파일에 쓴다.
-// 세션이 쓴 코드를 돌리니 인증 없는 환경에서 돌린다. 파일이 불러와지지 않으면 결과가 비어 있다.
-// 그 커밋의 lock 파일로 의존성을 먼저 깐다(rebase로 dev의 lock이 바뀌었을 수 있다)
+// PR의 코드를 돌리니 인증 없는 환경에서 돌린다. 파일이 불러와지지 않으면 결과가 비어 있다.
+// 그 커밋의 lock 파일로 의존성을 먼저 깐다(PR과 dev의 lock이 다를 수 있다)
 export async function results(
 	files: string[],
 	cwd: string,
@@ -149,25 +134,6 @@ const deps = (pkg: string): string[] => {
 		return [];
 	}
 };
-// 계약 정리 표시: 병렬 변경(expand) 재계획이 만든 잎에 하네스가 다는 댓글의 머리. 뒤에 "#<노드>)"
-export const CLEANUP = "계약 정리 (";
-// 잎이 계약 정리 잎이면 고쳐도 되는 계약의 노드. 하네스 계정이 단 댓글만 센다: 세션에는 GitHub 열쇠가 없고,
-// 사람·워크플로가 단 댓글은 작성자가 다르다. 하네스가 세션 글을 옮겨 다는 댓글(재계획 칸 등)은 머리가 다르다
-export const cleanup = (t: Pick<Tree, "comments">, account: string) => {
-	const c = t.comments.find(
-		(c) => c.author.toLowerCase() === account && c.body.startsWith(CLEANUP),
-	);
-	const n = c?.body.slice(CLEANUP.length).match(/^#(\d+)\)/)?.[1];
-	return n ? Number(n) : undefined;
-};
-
-// 재계획의 병렬 변경과 계약 정리 잎은 자기 노드의 계약 테스트(인수 테스트는 아님)를 고치거나 지울 수 있다
-const mine = (f: string, own?: number) =>
-	own !== undefined &&
-	f.startsWith(`contracts/${own}/`) &&
-	/\.contract\./.test(f);
-const ownerOf = (f: string) => Number(f.match(/^contracts\/(\d+)\//)?.[1] ?? 0);
-
 export type Facts = {
 	contracts: string[]; // 고치거나 지운 기존 계약·인수 테스트
 	risk: string[]; // 건드린 위험 경로
@@ -178,12 +144,7 @@ type Side = { md: string; pkg: string }; // CLAUDE.md와 package.json
 
 // 사실 계산: git diff --name-status --no-renames의 출력과 양쪽 CLAUDE.md·package.json으로 센다.
 // 위험 경로 목록은 dev 쪽을 쓴다. PR이 목록에서 자기 경로를 빼도 걸리고, 목록을 바꾼 것 자체가 위험 경로다
-export function facts(
-	status: string,
-	base: Side,
-	head: Side,
-	own?: number,
-): Facts {
+export function facts(status: string, base: Side, head: Side): Facts {
 	const changes = status
 		.split("\n")
 		.filter(Boolean)
@@ -199,7 +160,7 @@ export function facts(
 		risk.push("CLAUDE.md의 위험 경로 목록");
 	return {
 		contracts: changes
-			.filter(([s, f]) => s !== "A" && TESTS.test(f) && !mine(f, own))
+			.filter(([s, f]) => s !== "A" && TESTS.test(f))
 			.map(([, f]) => f),
 		risk,
 		deleted: changes
@@ -213,13 +174,10 @@ export function facts(
 
 // 래칫: dev에서 초록이던 계약·인수 테스트는 HEAD에서도 초록이어야 한다. 빨강이 됐거나 사라졌으면 깨진 것이다.
 // 아직 빨강인 건 봐준다. 통과 목록은 저장하지 않고 머지 때마다 dev에서 계산한다.
-// own이면 그 노드의 계약 테스트 중 이 PR이 고치거나 지운 파일만 빼고, 손대지 않은 건 그대로 지킨다
-// push HEAD:dev의 fast-forward가 비교한 dev가 그새 바뀌지 않았음을 보장한다
 // skip: 계약 정리로 고친 파일. 그 파일만 빼고 나머지는 지킨다
 export async function ratchet(
 	wt: string,
 	run: Run,
-	own?: number,
 	skip: string[] = [],
 ): Promise<{ broken: string[]; kept: number }> {
 	const list = async (ref: string) =>
@@ -232,25 +190,6 @@ export async function ratchet(
 		).filter((f) => TESTS.test(f));
 	const files = await list("origin/dev");
 	if (!files.length) return { broken: [], kept: 0 };
-	const touched = new Set(
-		own === undefined
-			? []
-			: paths(
-					await run(
-						"git",
-						[
-							"diff",
-							"--name-only",
-							"--no-renames", // facts()와 같게: 옮긴 옛 파일도 손댄 파일이다
-							"origin/dev",
-							"HEAD",
-							"--",
-							`contracts/${own}`,
-						],
-						wt,
-					),
-				),
-	);
 	const dev = `${wt}-dev`;
 	await quiet(run("git", ["worktree", "remove", "--force", dev], wt));
 	await run("git", ["worktree", "add", "--detach", dev, "origin/dev"], wt);
@@ -262,9 +201,7 @@ export async function ratchet(
 	}
 	const key = (f: string, r: Row) => `${f} › ${r.name}`;
 	const green = [...before].flatMap(([f, rs]) =>
-		(mine(f, own) && touched.has(f)) || skip.includes(f)
-			? []
-			: rs.filter((r) => r.ok).map((r) => key(f, r)),
+		skip.includes(f) ? [] : rs.filter((r) => r.ok).map((r) => key(f, r)),
 	);
 	const now = new Set(await list("HEAD"));
 	const after = await results(
@@ -335,7 +272,7 @@ export const allowed = (contracts: string[], pr?: Pr) => {
 };
 
 // 판정: 막힘(fail)이면 빨강. wait면 초록에 사람이 볼 것을 표시한다. report는 로그와 잡 요약 본문
-export async function judge(wt: string, run: Run, own?: number, pr?: Pr) {
+export async function judge(wt: string, run: Run, pr?: Pr) {
 	const show = (ref: string, f: string) =>
 		run("git", ["show", `${ref}:${f}`], wt).catch(() => "");
 	const status = await run(
@@ -353,7 +290,6 @@ export async function judge(wt: string, run: Run, own?: number, pr?: Pr) {
 			md: await show("HEAD", "CLAUDE.md"),
 			pkg: await show("HEAD", "package.json"),
 		},
-		own,
 	);
 	const changed = status
 		.split("\n")
@@ -362,34 +298,23 @@ export async function judge(wt: string, run: Run, own?: number, pr?: Pr) {
 	const tidy = allowed(f.contracts, pr);
 	const bad = f.contracts.filter((c) => !tidy.includes(c));
 	// 허가 없이 계약을 고쳤으면 막힌다. 래칫은 돌리지 않는다
-	const r = bad.length
-		? { broken: [], kept: 0 }
-		: await ratchet(wt, run, own, tidy);
+	const r = bad.length ? { broken: [], kept: 0 } : await ratchet(wt, run, tidy);
 	const sec = await security(changed, wt, run);
 	let fail: Failed | undefined;
-	if (bad.length) {
-		const diff = await run(
-			"git",
-			["diff", "origin/dev", "HEAD", "--", ...bad],
-			wt,
-		);
+	if (bad.length)
 		fail = {
 			why: `기존 계약·인수 테스트를 고쳤다: ${bad.join(", ")}`,
-			fix: `기존 계약·인수 테스트(${bad.join(", ")})는 고치거나 지우지 마. 계약 정리면 PR에 contract-change 라벨을 달고 TL;DR Changed에 그 파일을 적는다\n\n${diff}`,
-			stop: true,
-			owners: [...new Set(bad.map(ownerOf))].filter(Boolean),
 		};
-	} else if (r.broken.length)
+	else if (r.broken.length)
 		fail = {
 			why: `래칫: dev에서 초록이던 계약·인수 테스트가 깨졌다 (${r.broken.length}개)`,
-			fix: `dev에서 초록이던 계약·인수 테스트가 빨강이 됐거나 사라졌다. 고쳐:${items(r.broken)}`,
 		};
 	const wait =
 		!fail && tidy.length + f.risk.length + f.deleted.length + sec.length > 0;
 	const word = fail
 		? `막힘 — ${fail.why}`
 		: wait
-			? "사람 승인 대기 — 계약 정리·위험 경로·지운 테스트·보안 지적이 있다. 체크는 초록이고, 사람이 보고 머지를 정한다"
+			? "사람이 볼 것 있음 — 계약 정리·위험 경로·지운 테스트·보안 지적이 있다. 체크는 초록이고, 사람이 보고 머지를 정한다"
 			: "통과";
 	const report = [
 		`지키는 검사: ${word}`,
@@ -405,135 +330,6 @@ export async function judge(wt: string, run: Run, own?: number, pr?: Pr) {
 	return { fail, wait, report };
 }
 
-// 이슈·PR 댓글을 쓴 사람과 함께 끝까지 읽는다
-export type Said = {
-	id: number;
-	user: string;
-	type: string; // User · Bot
-	assoc: string; // author_association
-	body: string;
-};
-export const said = async (repo: string, n: number, run: Run) =>
-	(
-		await run("gh", [
-			"api",
-			"--paginate",
-			`repos/${repo}/issues/${n}/comments?per_page=100`,
-			"--jq",
-			".[] | {id, user: .user.login, type: .user.type, assoc: .author_association, body}",
-		])
-	)
-		.split("\n")
-		.filter(Boolean)
-		.map((l): Said => JSON.parse(l));
-// 사람의 판정(/승인, 8의 /맞다 등)은 하네스 계정이 아닌 사람(협업자 이상)이 단 것만 센다.
-// PR의 워크플로가 bot으로 단 댓글도 세지 않는다. 하네스와 사람이 같은 계정이면 판정할 수 없다(자기 채점 금지)
-export const byHuman = (c: Said, account: string) =>
-	c.user.toLowerCase() !== account && member(c);
-// 협업자 이상의 사람 계정(User). 하네스 계정(머신 유저)도 든다. claim은 이것만 센다(사람도 일꾼 하나)
-export const member = (c: { type?: string; assoc?: string }) =>
-	c.type === "User" && HUMAN.includes(c.assoc ?? "");
-
-// 사람의 /승인: 대기 댓글(wait) 뒤에 사람이 단 "/승인"만 센다
-async function approve(
-	pr: number,
-	wait: number,
-	o: Opts,
-	run: Run,
-): Promise<Failed | undefined> {
-	for (;;) {
-		if (
-			(await said(o.repo, pr, run)).some(
-				(c) =>
-					c.id > wait &&
-					byHuman(c, o.account) &&
-					firstLine(c.body.trim()) === "/승인",
-			)
-		)
-			return;
-		const state = await run("gh", [
-			"pr",
-			"view",
-			String(pr),
-			"-R",
-			o.repo,
-			"--json",
-			"state",
-			"--jq",
-			".state",
-		]);
-		if (state.trim() !== "OPEN")
-			return {
-				why: `위험 경로 대기 중에 PR이 닫혔다 (${state.trim()})`,
-				stop: true,
-			};
-		await sleep(o.poll ?? POLL);
-	}
-}
-
-async function waitChecks(pr: number, o: Opts, run: Run, cwd: string) {
-	// push 직후엔 체크가 아직 안 잡혀 있을 수 있다
-	for (let tries = 0; ; tries++) {
-		try {
-			return await run(
-				"gh",
-				["pr", "checks", String(pr), "-R", o.repo, "--watch", "--fail-fast"],
-				cwd,
-			);
-		} catch (e) {
-			if (tries >= 30 || !String(e).includes("no checks reported")) throw e;
-			await sleep(10_000);
-		}
-	}
-}
-
-// 순차 머지: 잠금 대신 dev의 fast-forward가 잠금이다. 그 사이 dev가 움직이면 push가 거절된다.
-// rebase한 뒤 판정하고(PR 댓글), 막히면 멈춘다. 통과면 CI, 위험하면 /승인, 그다음 force 없이 dev로.
-// 실패면 이유를 돌려준다
-export async function merge(
-	pr: number,
-	wt: string,
-	o: Opts,
-	run: Run,
-	g: Gate = {},
-): Promise<Failed | undefined> {
-	await run("git", ["fetch", "origin", "dev"], wt);
-	try {
-		await run("git", ["rebase", "origin/dev"], wt);
-	} catch (e) {
-		await quiet(run("git", ["rebase", "--abort"], wt));
-		return { why: `dev에 rebase하면 충돌난다\n\n${e}` };
-	}
-	const j = await judge(wt, run, g.own);
-	const said: { id: number } = JSON.parse(
-		await run("gh", [
-			"api",
-			`repos/${o.repo}/issues/${pr}/comments`,
-			"-X",
-			"POST",
-			"-f",
-			`body=${j.report}`,
-		]),
-	);
-	if (j.fail) return j.fail;
-	if (j.wait) g.wait ??= said.id;
-	await run("git", ["push", "--force-with-lease"], wt);
-	try {
-		await waitChecks(pr, o, run, wt);
-	} catch (e) {
-		return { why: "CI 실패", fix: `CI가 실패했다. 고쳐:\n${e}` };
-	}
-	if (j.wait && g.wait) {
-		const no = await approve(pr, g.wait, o, run);
-		if (no) return no;
-	}
-	try {
-		await run("git", ["push", "origin", "HEAD:dev"], wt); // force 없이
-	} catch (e) {
-		return { why: `dev가 그새 움직여 fast-forward가 거절됐다\n\n${e}` };
-	}
-}
-
 // CI 잡: judge를 PR 체크아웃에서 돌려 결과를 로그와 잡 요약에 보인다. 막힘이면 체크가 빨강, 표시면 초록에 경고
 if (import.meta.main) {
 	const { values } = parseArgs({
@@ -545,7 +341,7 @@ if (import.meta.main) {
 		labels: (p.labels ?? []).map((l: { name: string }) => l.name),
 		body: p.body ?? "",
 	};
-	const j = await judge(resolve(values.dir), sh, undefined, pr);
+	const j = await judge(resolve(values.dir), sh, pr);
 	console.log(j.report);
 	if (process.env.GITHUB_STEP_SUMMARY)
 		appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${j.report}\n`);

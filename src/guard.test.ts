@@ -12,8 +12,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-	CLEANUP,
-	cleanup,
 	facts,
 	install,
 	ratchet,
@@ -110,72 +108,13 @@ test("래칫: 바뀐 게 없으면 깨진 것도 없다", async () => {
 	assert.deepEqual(await ratchet(dir, run), { broken: [], kept: 4 });
 });
 
-test("래칫: 초록이던 테스트가 사라져도 깨진 것이다. 예외는 재계획의 병렬 변경이 자기 노드의 옛 계약을 지울 때뿐", async () => {
+test("래칫: 초록이던 테스트가 사라져도 깨진 것이다", async () => {
 	const { dir, commit } = await repo();
 	await commit({}, ["contracts/16/old.contract.js"]);
 	assert.deepEqual((await ratchet(dir, run)).broken.sort(), [
 		"contracts/16/old.contract.js › old 둘",
 		"contracts/16/old.contract.js › old 하나",
 	]);
-	assert.deepEqual((await ratchet(dir, run, 16)).broken, []);
-	assert.equal((await ratchet(dir, run, 17)).broken.length, 2);
-});
-
-test("래칫: 자기 노드라도 이 PR이 손대지 않은 계약 테스트는 지킨다", async () => {
-	const { dir, commit } = await repo();
-	await commit({ "src/mul.js": "export const mul = (a, b) => a + b;\n" }, [
-		"contracts/16/old.contract.js",
-	]);
-	assert.deepEqual((await ratchet(dir, run, 16)).broken.sort(), [
-		"contracts/16/mul.contract.js › mul 둘",
-		"contracts/16/mul.contract.js › mul 하나",
-	]);
-});
-
-test("래칫: 자기 노드의 옛 계약 파일을 비슷한 새 파일로 옮겨도 손댄 파일로 본다 (git의 rename 감지와 상관없이)", async () => {
-	const { dir, commit } = await repo();
-	await commit(
-		{
-			"contracts/16/new.contract.js": contract("old", "old").replace(
-				"// old",
-				"// new",
-			),
-		},
-		["contracts/16/old.contract.js"],
-	);
-	assert.deepEqual((await ratchet(dir, run, 16)).broken, []);
-});
-
-test("계약 정리 표시: 하네스 계정이 잎 이슈에 단 '계약 정리 (#노드)' 댓글만 센다", () => {
-	const leaf = (...cs: { author: string; body: string }[]) => ({
-		comments: cs.map((c, id) => ({ id, createdAt: "", updatedAt: "", ...c })),
-	});
-	const mark = `${CLEANUP}#16): 옛 계약 테스트를 지운다`;
-	assert.equal(
-		cleanup(leaf({ author: "kagami-bot", body: mark }), "kagami-bot"),
-		16,
-	);
-	assert.equal(
-		cleanup(leaf({ author: "Kagami-Bot", body: mark }), "kagami-bot"),
-		16,
-	);
-	// 사람·워크플로가 단 같은 글, 하네스가 단 다른 머리의 글(세션이 쓴 글이 뒤에 붙는다)은 표시가 아니다
-	assert.equal(
-		cleanup(leaf({ author: "pancheble", body: mark }), "kagami-bot"),
-		undefined,
-	);
-	assert.equal(
-		cleanup(leaf({ author: "github-actions", body: mark }), "kagami-bot"),
-		undefined,
-	);
-	assert.equal(
-		cleanup(
-			leaf({ author: "kagami-bot", body: `재계획 칸 (PR #3): ${mark}` }),
-			"kagami-bot",
-		),
-		undefined,
-	);
-	assert.equal(cleanup(leaf(), "kagami-bot"), undefined);
 });
 
 test("래칫: 불러오기가 깨져 테스트가 안 돌면 깨진 것이다", async () => {
@@ -267,14 +206,13 @@ test("위험 경로는 CLAUDE.md의 Risk paths 절에서 백틱으로 적은 것
 		".github/workflows/",
 	]);
 	assert.deepEqual(riskPaths(""), []);
-	// 이 저장소의 목록: 세션 권한·프롬프트·머지 판정이 들어 있다
+	// 이 저장소의 목록: 가드·hook·CI·에이전트 설정이 들어 있다
 	const mine = riskPaths(
 		readFileSync(new URL("../CLAUDE.md", import.meta.url), "utf8"),
 	);
 	for (const p of [
-		"prompts/",
-		"src/session.ts",
 		"src/guard.ts",
+		"hooks/",
 		".github/workflows/",
 		".claude/agents/",
 	])
@@ -305,11 +243,6 @@ test("사실 계산: 고친 계약·인수 테스트, 위험 경로, 지운 테�
 		deleted: ["contracts/16/sq.accept.js", "src/old.test.js"],
 		deps: ["c"],
 	});
-	// 병렬 변경(own)은 자기 노드의 계약 테스트만 고칠 수 있다. 인수 테스트는 아니다
-	assert.deepEqual(facts(status, base, head, 16).contracts, [
-		"contracts/16/sq.accept.js",
-	]);
-	assert.equal(facts(status, base, head, 17).contracts.length, 2);
 });
 
 test("위험 경로 목록은 dev 쪽으로 계산하고, 목록을 바꾼 것 자체가 위험 경로다", () => {
@@ -438,7 +371,7 @@ test("CI 가드: 위험 경로를 건드린 PR은 초록에 경고로 사람이 
 	await commit({ "ci/guard.yml": "x\n" });
 	const r = ci(dir);
 	assert.equal(r.code, 0, r.out);
-	assert.match(r.out, /^지키는 검사: 사람 승인 대기 — /m);
+	assert.match(r.out, /^지키는 검사: 사람이 볼 것 있음 — /m);
 	assert.match(r.out, /^::warning::/m);
 	assert.doesNotMatch(r.out, /\/승인/);
 	assert.match(r.out, /위험 경로:\n {2}- ci\/guard\.yml/);
@@ -456,7 +389,7 @@ test("CI 가드: contract-change 라벨과 TL;DR Changed에 그 파일이 둘 �
 	await commit(tidy);
 	const r = ci(dir, { labels: ["leaf", "contract-change"], body: TLDR });
 	assert.equal(r.code, 0, r.out);
-	assert.match(r.out, /^지키는 검사: 사람 승인 대기 — /m);
+	assert.match(r.out, /^지키는 검사: 사람이 볼 것 있음 — /m);
 	assert.match(r.out, /계약 정리:\n {2}- contracts\/16\/mul\.contract\.js/);
 	assert.match(r.out, /^::warning::/m);
 	// 고친 파일만 래칫에서 빠지고, 손대지 않은 old 계약 둘은 지킨다

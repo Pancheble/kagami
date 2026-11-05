@@ -1,5 +1,5 @@
-// 남는 파일(guard·tree·spec·pick 등)이 함께 쓰는 것: 명령 실행(Run, sh), 하네스 옵션 타입(Opts), 작은 도우미,
-// 세션 환경에서 인증 빼기(noKey), CLI 숫자 인자(num). 자율 루프 파일에 기대지 않으려고 여기 둔다
+// guard·tree·spec·changed가 함께 쓰는 것: 명령 실행(Run, sh), 작은 도우미(quiet),
+// 대상 저장소의 코드를 인증 없이 돌리기(noKey), CLI 숫자 인자(num)
 import { execFile } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,28 +12,13 @@ export type Run = (
 	cwd?: string,
 	env?: NodeJS.ProcessEnv, // 없으면 하네스 환경 그대로
 ) => Promise<string>;
-export type Opts = {
-	repo: string;
-	dir: string;
-	claude: string;
-	workers: number;
-	root: number; // 뿌리 이슈
-	focus: number; // 집중 노드
-	dial: number; // 범위 다이얼
-	account: string; // 하네스 계정(봇, 소문자). claim에 적고, /승인에서 뺀다
-	ttl: number; // 시간. 이보다 오래된 claim은 시도가 끊긴 것으로 본다
-	poll?: number; // ms. 위험 경로 대기에서 /승인을 다시 볼 간격(기본 1분)
-	ctl: string; // 정지·방향 수정 파일 폴더
-};
-
 export const quiet = (p: Promise<unknown>) => p.catch(() => {});
-export const firstLine = (s: string) => s.split("\n")[0];
 
 const exec = promisify(execFile);
 export const sh: Run = async (cmd, args, cwd, env) => {
 	try {
 		const p = exec(cmd, args, { cwd, env, maxBuffer: 64 << 20 });
-		p.child.stdin?.end(); // claude -p는 stdin이 열려 있으면 3초 기다린다
+		p.child.stdin?.end(); // stdin을 기다리는 명령이 멈추지 않게
 		return (await p).stdout;
 	} catch (e) {
 		const { stdout = "", stderr = "" } = e as {
@@ -44,9 +29,8 @@ export const sh: Run = async (cmd, args, cwd, env) => {
 	}
 };
 
-// 열쇠를 안 준다: 세션 환경에서 GitHub·git 인증을 뺀다. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
-// 그래서 허용된 node -e로 gh나 git push를 불러도 인증이 없어 실패한다. claude 자신의 로그인은 그대로다.
-// push·PR·이슈·fetch는 하네스만 한다
+// 열쇠를 안 준다: GitHub·git 인증을 뺀 환경. gh 토큰과 설정, git 자격 증명 도우미, ssh 에이전트.
+// 가드가 대상 저장소의 의존성을 깔고 테스트를 돌릴 때(install·results) 쓴다. 그 코드가 gh나 git push를 불러도 실패한다
 export function noKey(): NodeJS.ProcessEnv {
 	const env = { ...process.env };
 	for (const k of [
