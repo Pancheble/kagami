@@ -25,7 +25,7 @@ export const sh: Run = async (cmd, args, cwd, env) => {
 			stdout?: string;
 			stderr?: string;
 		};
-		throw new Error(`${cmd} ${args[0]} 실패\n${stderr}${stdout}`);
+		throw new Error(`${cmd} ${args[0]} failed\n${stderr}${stdout}`);
 	}
 };
 
@@ -56,6 +56,6 @@ export function noKey(): NodeJS.ProcessEnv {
 // CLI 숫자 인자. min 이상 정수만
 export function num(flag: string, v: string, min: number): number {
 	if (!/^\d+$/.test(v) || Number(v) < min)
-		throw new Error(`${flag}는 ${min} 이상의 정수여야 한다: "${v}"`);
+		throw new Error(`${flag} must be an integer >= ${min}: "${v}"`);
 	return Number(v);
 }

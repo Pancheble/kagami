@@ -18,7 +18,7 @@ export const newIssues = (sub: number[], comments: string[]): number[] => [
 ];
 
 const list = (xs: string[]) => (xs.length ? xs.join(", ") : "None");
-// AGENTS.md "PR TL;DR 형식"의 칸 순서. facts()가 세는 지운 테스트는 맨 뒤에 붙인다
+// AGENTS.md "PR TL;DR format"의 칸 순서. facts()가 세는 지운 테스트는 맨 뒤에 붙인다
 export const line = (f: Facts, issues: number[]) =>
 	[
 		`Changed: new issues ${list(issues.map((n) => `#${n}`))}`,
@@ -52,7 +52,7 @@ if (import.meta.main) {
 	const n =
 		values.issue ??
 		(await git("branch", "--show-current")).match(/^leaf\/(\d+)-/)?.[1];
-	if (!n) throw new Error("잎 번호를 모른다: --issue <번호>");
+	if (!n) throw new Error("Unknown leaf number: --issue <number>");
 	const nums = (out: string) => out.split("\n").filter(Boolean).map(Number);
 	const sub = nums(
 		await sh("gh", [

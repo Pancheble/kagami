@@ -96,10 +96,12 @@ export async function install(
 	run: Run,
 ): Promise<string> {
 	if (!existsSync(join(dir, ".git")))
-		throw new Error(`git 저장소가 아니다: ${dir}`);
+		throw new Error(`Not a git repository: ${dir}`);
 	const extra = readdirSync(dir).filter((f) => f !== ".git");
 	if (extra.length)
-		throw new Error(`빈 새 저장소만 깐다. 이미 있는 것: ${extra.join(", ")}`);
+		throw new Error(
+			`Installs only into a new empty repository. Already there: ${extra.join(", ")}`,
+		);
 	const head = await run(
 		"git",
 		["rev-parse", "--verify", "-q", "HEAD"],
@@ -108,7 +110,10 @@ export async function install(
 		() => true,
 		() => false,
 	);
-	if (head) throw new Error("빈 새 저장소만 깐다. 커밋이 이미 있다");
+	if (head)
+		throw new Error(
+			"Installs only into a new empty repository. It already has a commit",
+		);
 
 	const target = (
 		await run(
@@ -141,5 +146,7 @@ if (import.meta.main) {
 		{ root, ref: values.ref },
 		sh,
 	);
-	console.log(`${target}에 깔았다. dev에 첫 커밋까지 했고 push는 아직이다`);
+	console.log(
+		`Installed into ${target}. Made the first commit on dev; not pushed yet`,
+	);
 }

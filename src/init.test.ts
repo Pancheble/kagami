@@ -30,7 +30,7 @@ function fake(commits = false) {
 		calls.push([cmd, ...args]);
 		if (args[0] === "rev-parse") {
 			if (commits) return "abc\n";
-			throw new Error("git rev-parse 실패");
+			throw new Error("git rev-parse failed");
 		}
 		if (args[0] === "repo") return `${TARGET}\n`;
 		return "";
@@ -61,7 +61,10 @@ test("빈 새 저장소에 plan의 파일을 쓰고, 라벨 9개를 만들고, d
 test("커밋이 있으면 거부하고 아무것도 쓰지 않는다", async () => {
 	const dir = repo();
 	const { run, calls } = fake(true);
-	await assert.rejects(install(dir, { root: ROOT }, run), /커밋/);
+	await assert.rejects(
+		install(dir, { root: ROOT }, run),
+		/already has a commit/,
+	);
 	assert.deepEqual(readdirSync(dir), [".git"]);
 	assert.ok(!calls.some((c) => c[0] === "gh"));
 });

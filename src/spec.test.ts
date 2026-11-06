@@ -50,8 +50,8 @@ test("칸이 없거나 주석만 있으면 빠졌다", () => {
 		"<!-- 테스트 계정, 시드 데이터 -->",
 	);
 	assert.deepEqual(check(body), [
-		"평가자 준비물: 비었다",
-		"안 할 것: 칸이 없다",
+		"Evaluator setup: empty",
+		"Out of scope: missing",
 	]);
 });
 
@@ -70,7 +70,7 @@ test("위험 경로: CLAUDE.md 참고는 통과한다", () => {
 test("위험 경로에 경로 목록이나 없음을 적으면 CLAUDE.md로 보낸다", () => {
 	for (const text of ["`src/auth/`", "없음"])
 		assert.deepEqual(check(FULL.replace("CLAUDE.md 참고", text)), [
-			'위험 경로: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "CLAUDE.md 참고"만 적는다',
+			'Risk paths: the source of truth is Risk paths in CLAUDE.md. Write only "See CLAUDE.md" here',
 		]);
 });
 
@@ -80,7 +80,7 @@ test("확인 방법이 없는 성공 기준을 하나씩 알린다", () => {
 		"",
 	).replace("- 가입한", "  - 덧붙인 설명은 기준이 아니다\n- 가입한");
 	assert.deepEqual(check(body), [
-		'성공 기준 2 "틀린 비밀번호면 에러가 뜬다": 확인 방법이 없다',
+		'Success criteria 2 "틀린 비밀번호면 에러가 뜬다": no check method',
 	]);
 });
 
@@ -90,7 +90,7 @@ test("성공 기준에 목록이 없으면 빠졌다", () => {
 		"로그인이 잘 된다\n",
 	);
 	assert.deepEqual(check(body), [
-		"성공 기준: 목록(- 기준 (확인: 방법))이 없다",
+		"Success criteria: no list (- <criterion> (check: <how>))",
 	]);
 });
 

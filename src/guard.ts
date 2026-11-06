@@ -164,7 +164,7 @@ export function facts(status: string, base: Side, head: Side): Facts {
 		.map(([, f]) => f)
 		.filter((f) => list.some((p) => under(f, p)));
 	if (riskPaths(head.md).join("\n") !== list.join("\n"))
-		risk.push("CLAUDE.md의 위험 경로 목록");
+		risk.push("Risk paths list in CLAUDE.md");
 	return {
 		contracts: changes
 			.filter(([s, f]) => s !== "A" && TESTS.test(f))
@@ -249,7 +249,7 @@ export async function security(
 			wt,
 		),
 	);
-	if (!existsSync(dest)) return ["보안 계산 검사를 돌리지 못했다"];
+	if (!existsSync(dest)) return ["Could not run the security lint"];
 	type D = {
 		category: string;
 		message: string;
@@ -262,7 +262,7 @@ export async function security(
 }
 
 const items = (xs: string[]) =>
-	xs.length ? xs.map((x) => `\n  - ${x}`).join("") : " 없음";
+	xs.length ? xs.map((x) => `\n  - ${x}`).join("") : " None";
 
 // PR의 라벨과 본문(GITHUB_EVENT_PATH의 pull_request)
 export type Pr = { labels: string[]; body: string };
@@ -312,33 +312,33 @@ export async function judge(wt: string, run: Run, pr?: Pr) {
 	// 위험 경로 정본은 CLAUDE.md의 Risk paths 하나다(뿌리 #49 정한 것 6). PR 쪽에서 못 찾으면 막는다
 	if (section(head.md) === undefined)
 		fail = {
-			why: "CLAUDE.md에 Risk paths 절이 없다 (위험 경로 정본. `# Risk paths` 제목 아래 백틱으로 경로를 적는다)",
+			why: "CLAUDE.md has no Risk paths section (the source of truth for risk paths: list the paths in backticks under a `# Risk paths` heading)",
 		};
 	else if (bad.length)
 		fail = {
-			why: `기존 계약·인수 테스트를 고쳤다: ${bad.join(", ")}`,
+			why: `edited existing contract/acceptance tests: ${bad.join(", ")}`,
 		};
 	else if (r.broken.length)
 		fail = {
-			why: `래칫: dev에서 초록이던 계약·인수 테스트가 깨졌다 (${r.broken.length}개)`,
+			why: `ratchet: contract/acceptance tests that were green on dev broke (${r.broken.length})`,
 		};
 	const wait =
 		!fail && tidy.length + f.risk.length + f.deleted.length + sec.length > 0;
 	const word = fail
-		? `막힘 — ${fail.why}`
+		? `blocked — ${fail.why}`
 		: wait
-			? "사람이 볼 것 있음 — 계약 정리·위험 경로·지운 테스트·보안 지적이 있다. 체크는 초록이고, 사람이 보고 머지를 정한다"
-			: "통과";
+			? "needs a human look — contract cleanup, risk paths, deleted tests, or security findings. The check is green; the human looks and decides on the merge"
+			: "pass";
 	const report = [
-		`지키는 검사: ${word}`,
+		`kagami guard: ${word}`,
 		"",
-		`- 계약·인수 테스트 수정:${items(bad)}`,
-		`- 계약 정리:${items(tidy)}`,
-		`- 래칫: dev에서 초록 ${r.kept}개 중 깨진 것:${items(r.broken)}`,
-		`- 위험 경로:${items(f.risk)}`,
-		`- 지운 테스트:${items(f.deleted)}`,
-		`- 보안 계산 검사:${items(sec)}`,
-		`- 새 의존성:${items(f.deps)}`,
+		`- Contract/acceptance test edits:${items(bad)}`,
+		`- Contract cleanup:${items(tidy)}`,
+		`- Ratchet: broken of ${r.kept} green on dev:${items(r.broken)}`,
+		`- Risk paths:${items(f.risk)}`,
+		`- Deleted tests:${items(f.deleted)}`,
+		`- Security lint:${items(sec)}`,
+		`- New dependencies:${items(f.deps)}`,
 	].join("\n");
 	return { fail, wait, report };
 }
@@ -361,6 +361,6 @@ if (import.meta.main) {
 	if (j.fail) process.exitCode = 1;
 	else if (j.wait)
 		console.log(
-			"::warning::kagami 가드: 사람이 볼 것이 있다 (계약 정리·위험 경로·지운 테스트·보안 지적)",
+			"::warning::kagami guard: needs a human look (contract cleanup, risk paths, deleted tests, security findings)",
 		);
 }

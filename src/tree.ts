@@ -30,15 +30,23 @@ export type Tree = {
 
 // 담당은 라벨이 아니라 이슈 assignee로 둔다. 기록 라벨은 AGENTS.md "기록 형식"의 표시어와 같다
 const LABELS = [
-	["node", "노드 이슈", "1D76DB"],
-	["leaf", "잎 티켓", "0E8A16"],
-	["needs-decision", "사람의 답을 기다린다. 답이 달리면 뗀다", "D93F0B"],
-	["split", "쪼개기 기록", "5319E7"],
-	["contract-change", "자식끼리의 약속이 바뀌었다", "FBCA04"],
-	["blocked", "막혔다. 새 세션에서 처음부터", "B60205"],
-	["off-recommendation", "추천 밖의 일을 골랐다", "C5DEF5"],
-	["spec-gap", "티켓과 부모에 없던 정보가 필요했다", "F9D0C4"],
-	["discovered", "하다가 찾은 새 일", "BFDADC"],
+	["node", "Node issue", "1D76DB"],
+	["leaf", "Leaf issue", "0E8A16"],
+	[
+		"needs-decision",
+		"Waiting for the human's answer. Remove once answered",
+		"D93F0B",
+	],
+	["split", "Split record", "5319E7"],
+	["contract-change", "Child contracts changed", "FBCA04"],
+	["blocked", "Blocked. Start over in a new session", "B60205"],
+	["off-recommendation", "Picked work outside the recommendations", "C5DEF5"],
+	[
+		"spec-gap",
+		"Needed information the ticket and parent did not have",
+		"F9D0C4",
+	],
+	["discovered", "New work found along the way", "BFDADC"],
 ];
 
 export async function ensureLabels(repo: string, run: Run) {
@@ -135,7 +143,7 @@ export async function readTree(
 			]),
 		).data.repository.issue;
 	const i: Raw | null = await query(QUERY);
-	if (!i) throw new Error(`${repo}#${number} 이슈가 없다`);
+	if (!i) throw new Error(`No issue ${repo}#${number}`);
 	const comments = [...i.comments.nodes];
 	for (let p = i.comments.pageInfo; p?.hasNextPage; ) {
 		const next: Page = (await query(MORE, "-f", `after=${p.endCursor}`))
@@ -180,7 +188,7 @@ if (import.meta.main) {
 			labels: { type: "boolean" },
 		},
 	});
-	if (!values.repo) throw new Error("--repo가 필요하다");
+	if (!values.repo) throw new Error("--repo is required");
 	if (values.labels) await ensureLabels(values.repo, sh);
 	else if (values.root)
 		console.log(
@@ -190,5 +198,5 @@ if (import.meta.main) {
 				2,
 			),
 		);
-	else throw new Error("--root나 --labels가 필요하다");
+	else throw new Error("--root or --labels is required");
 }
