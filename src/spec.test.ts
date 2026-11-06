@@ -14,7 +14,7 @@ docs/plan.md
 
 ## 위험 경로
 
-\`src/auth/\`
+CLAUDE.md 참고
 
 ## 평가자 준비물
 
@@ -56,7 +56,22 @@ test("칸이 없거나 주석만 있으면 빠졌다", () => {
 });
 
 test("없음은 사람이 정한 답으로 센다", () => {
-	assert.deepEqual(check(FULL.replace("`src/auth/`", "없음")), []);
+	assert.deepEqual(
+		check(FULL.replace("시드 계정 test@example.com", "없음")),
+		[],
+	);
+});
+
+test("위험 경로: CLAUDE.md 참고는 통과한다", () => {
+	assert.ok(FULL.includes("## 위험 경로\n\nCLAUDE.md 참고\n"));
+	assert.deepEqual(check(FULL), []);
+});
+
+test("위험 경로에 경로 목록이나 없음을 적으면 CLAUDE.md로 보낸다", () => {
+	for (const text of ["`src/auth/`", "없음"])
+		assert.deepEqual(check(FULL.replace("CLAUDE.md 참고", text)), [
+			'위험 경로: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "CLAUDE.md 참고"만 적는다',
+		]);
 });
 
 test("확인 방법이 없는 성공 기준을 하나씩 알린다", () => {
