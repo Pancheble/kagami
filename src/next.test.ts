@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { collect, drift } from "./next.ts";
+import { collect, drift, roots } from "./next.ts";
 import type { Run } from "./run.ts";
 import type { Tree } from "./tree.ts";
 
@@ -27,6 +27,7 @@ const me = { assignees: ["someone"] };
 // 2: 5일 전 할당, 그 뒤 활동 없음 → stale
 // 3: 이슈 댓글 1일 전 / 4: 잎 브랜치 커밋 1일 전 / 5: 잎 PR 갱신 1일 전 → stale 아님
 // 6: 준비된 잎, 예전 잎 브랜치가 남음 / 7: 답 대기
+// 8: 이벤트가 100개를 넘는다. 첫 페이지엔 5일 전 할당만, 둘째 페이지에 1시간 전 할당 → stale 아님
 const tree = node(1, {
 	kind: "node",
 	labels: [],
@@ -48,6 +49,7 @@ const tree = node(1, {
 		node(5, me),
 		node(6),
 		node(7, { labels: ["leaf", "needs-decision"] }),
+		node(8, me),
 	],
 });
 
@@ -56,7 +58,19 @@ const assigned = [
 	{ event: "labeled", created_at: ago(1) }, // 라벨은 활동이 아니다
 ];
 const R = "repos/o/r";
-function fake(agentsMd: () => string) {
+const events = (n: number) => `${R}/issues/${n}/events?per_page=100`;
+// 이벤트는 페이지 목록. gh처럼 --paginate --slurp면 [페이지...], 아니면 첫 페이지만
+const pages: Record<string, unknown[][]> = {
+	...Object.fromEntries([2, 3, 4, 5].map((n) => [events(n), [assigned]])),
+	[events(8)]: [
+		[
+			...assigned,
+			...Array(98).fill({ event: "labeled", created_at: ago(100) }),
+		],
+		[{ event: "assigned", created_at: ago(1) }],
+	],
+};
+function fake(agentsMd: () => string, dev = true) {
 	const calls: string[][] = [];
 	const routes: Record<string, unknown> = {
 		[`${R}/git/matching-refs/heads/leaf/`]: [
@@ -68,17 +82,19 @@ function fake(agentsMd: () => string) {
 			{ head: { ref: "leaf/5-z" }, updated_at: ago(24) },
 			{ head: { ref: "leaf/22-x" }, updated_at: ago(1) }, // 2가 아니다
 		],
-		...Object.fromEntries(
-			[2, 3, 4, 5].map((n) => [
-				`${R}/issues/${n}/events?per_page=100`,
-				assigned,
-			]),
-		),
 	};
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args]);
 		const path = args[args.length - 1];
 		if (path === `${R}/contents/AGENTS.md?ref=dev`) return agentsMd();
+		if (path === `${R}/branches/dev`) {
+			if (!dev) throw new Error("gh api 실패\ngh: Branch not found (HTTP 404)");
+			return JSON.stringify({ name: "dev" });
+		}
+		if (path in pages) {
+			const all = args.includes("--paginate") && args.includes("--slurp");
+			return JSON.stringify(all ? pages[path] : pages[path][0]);
+		}
 		if (!(path in routes)) throw new Error(`모르는 호출 ${path}`);
 		return JSON.stringify(routes[path]);
 	};
@@ -117,6 +133,38 @@ test("collect: AGENTS.md가 없으면 버전 줄 없음으로, 다른 실패는 
 		throw new Error("gh api 실패\nconnection refused");
 	});
 	await assert.rejects(collect("o/r", tree, down.run, "0.1.0", NOW));
+});
+
+test("collect: AGENTS.md도 dev 브랜치도 없으면 버전 줄 없음이 아니라 dev 없음", async () => {
+	const missing = () => {
+		throw new Error("gh api 실패\ngh: Not Found (HTTP 404)");
+	};
+	const got = await collect(
+		"o/r",
+		tree,
+		fake(missing, false).run,
+		"0.1.0",
+		NOW,
+	);
+	assert.deepEqual(got.drift, { plugin: "0.1.0", dev: false });
+});
+
+test("roots: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸이 하나라도 있는 것만", async () => {
+	const calls: string[][] = [];
+	const run: Run = async (cmd, args) => {
+		calls.push([cmd, ...args]);
+		return JSON.stringify([
+			{ number: 77, body: "#71 평가자가 찾은 것\n\n## 목표\n\n고친다" }, // 부모 없는 discovered
+			{ number: 90, body: "## 기획 문서\r\n\r\ndocs/x.md\r\n" }, // 칸이 빠진 뿌리(plan)
+			{ number: 49, body: "## 기획 문서\n\n## 성공 기준\n\n## 안 할 것\n없음" },
+			{ number: 12, body: "" },
+		]);
+	};
+	assert.deepEqual(await roots("o/r", run), [49, 90]);
+	assert.deepEqual(calls.length, 1);
+	const [cmd, ...args] = calls[0];
+	assert.deepEqual([cmd, args[0], args[1]], ["gh", "issue", "list"]);
+	assert.ok(args.includes("no:parent-issue -label:leaf"), args.join(" "));
 });
 
 test("drift: 한 줄짜리 AGENTS.md도 읽는다", () => {

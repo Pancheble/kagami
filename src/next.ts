@@ -4,7 +4,7 @@
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
-import { check } from "./spec.ts";
+import { check, ITEMS } from "./spec.ts";
 import { readTree, type Tree } from "./tree.ts";
 import { stamped, version } from "./version.ts";
 
@@ -110,9 +110,41 @@ export function leftover(
 	return out;
 }
 
+// 뿌리: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸(spec.ts ITEMS의 ## 제목)이 하나라도 있는 것. 번호 순.
+// 칸이 빠진 뿌리(plan)도 센다. 칸이 하나도 없는 부모 없는 이슈(discovered 등)는 뿌리가 아니다
+export async function roots(repo: string, run: Run): Promise<number[]> {
+	const list: { number: number; body: string }[] = JSON.parse(
+		await run("gh", [
+			"issue",
+			"list",
+			"-R",
+			repo,
+			"--state",
+			"open",
+			"--search",
+			"no:parent-issue -label:leaf",
+			"--json",
+			"number,body",
+			"--limit",
+			"1000",
+		]),
+	);
+	return list
+		.filter((i) =>
+			i.body
+				.split(/^## /m)
+				.slice(1)
+				.some((p) => ITEMS.includes(p.split("\n")[0].trim())),
+		)
+		.map((i) => i.number)
+		.sort((a, b) => a - b);
+}
+
+const is404 = (e: Error) => e.message.includes("HTTP 404");
+
 // CLI가 모으는 것. GitHub를 읽기만 하고 쓰지 않는다. plugin은 플러그인 버전
 // 활동은 할당된 열린 이슈만 모은다(stale이 그것만 본다). 잎 브랜치 푸시는 브랜치 머리 커밋의 커밋 시각으로 본다
-// ponytail: 이슈 이벤트와 PR은 100개까지(PR은 최근 갱신 순). 넘으면 페이지 넘기기를 붙인다
+// ponytail: PR은 최근 갱신 순 100개까지. 넘으면 페이지 넘기기를 붙인다
 export async function collect(
 	repo: string,
 	tree: Tree,
@@ -121,8 +153,8 @@ export async function collect(
 	now: Date,
 ) {
 	const R = `repos/${repo}`;
-	const api = async (path: string) =>
-		JSON.parse(await run("gh", ["api", path]));
+	const api = async (path: string, ...flags: string[]) =>
+		JSON.parse(await run("gh", ["api", ...flags, path]));
 	const refs: { ref: string; object: { sha: string } }[] = await api(
 		`${R}/git/matching-refs/heads/leaf/`,
 	);
@@ -137,9 +169,14 @@ export async function collect(
 	for (const i of all(tree)) {
 		if (i.state !== "open" || !i.assignees.length) continue;
 		const mine = leftover([i.number], branches)[i.number] ?? [];
-		const events: { event: string; created_at: string }[] = await api(
-			`${R}/issues/${i.number}/events?per_page=100`,
-		);
+		// 이벤트는 오래된 순이라 끝까지 읽어야 최근 할당이 보인다
+		const events: { event: string; created_at: string }[] = (
+			await api(
+				`${R}/issues/${i.number}/events?per_page=100`,
+				"--paginate",
+				"--slurp",
+			)
+		).flat();
 		const times = [
 			...events.filter((e) => e.event === "assigned").map((e) => e.created_at),
 			...i.comments.map((c) => c.createdAt),
@@ -162,15 +199,25 @@ export async function collect(
 		"Accept: application/vnd.github.raw",
 		`${R}/contents/AGENTS.md?ref=dev`,
 	]).catch((e: Error) => {
-		if (e.message.includes("HTTP 404")) return "";
+		if (is404(e)) return undefined;
 		throw e;
 	});
+	// AGENTS.md가 404면 dev 브랜치부터 없는지 본다. 없으면 버전 줄 없음이 아니라 dev 없음이다
+	const dev =
+		md !== undefined ||
+		(await api(`${R}/branches/dev`).then(
+			() => true,
+			(e: Error) => {
+				if (is404(e)) return false;
+				throw e;
+			},
+		));
 	const r = ready(tree);
 	return {
 		ready: r,
 		stale: stale(tree, activity, now),
 		waiting: waiting(tree),
-		drift: drift(md, plugin),
+		drift: dev ? drift(md ?? "", plugin) : { plugin, dev: false as const },
 		leftover: leftover(
 			r.map((x) => x.number),
 			branches,
@@ -179,14 +226,19 @@ export async function collect(
 }
 
 // node src/next.ts --repo <owner/name> --root <뿌리 번호> → {ready, stale, waiting, drift?, leftover} JSON
+// node src/next.ts --repo <owner/name> → 뿌리 번호 배열 JSON
 if (import.meta.main) {
 	const { values } = parseArgs({
 		options: { repo: { type: "string" }, root: { type: "string" } },
 	});
-	if (!values.repo || !values.root)
+	if (!values.repo)
 		throw new Error(
-			"쓰는 법: node src/next.ts --repo <owner/name> --root <뿌리 번호>",
+			"쓰는 법: node src/next.ts --repo <owner/name> [--root <뿌리 번호>]",
 		);
+	if (!values.root) {
+		console.log(JSON.stringify(await roots(values.repo, sh)));
+		process.exit(0);
+	}
 	const tree = await readTree(values.repo, num("--root", values.root, 1), sh);
 	const plugin = version(fileURLToPath(new URL("..", import.meta.url)));
 	console.log(

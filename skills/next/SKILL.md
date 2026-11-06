@@ -11,10 +11,11 @@ AGENTS.md "세션을 열면"과 "한 번 일하는 순서" 1~5다. 규칙은 AGE
 ## 0. 모으기
 
 - `R`을 정한다: 인자가 없으면 `gh repo view --json nameWithOwner --jq .nameWithOwner`
-- 뿌리를 찾는다: `gh issue list -R R --state open --search "no:parent-issue -label:leaf" --json number,title`. 하나도 없으면 새 뿌리를 세우자고(`/kagami:plan`) 알리고 끝낸다
-- 뿌리마다 스크립트를 부른다. GitHub를 읽기만 한다
+- 뿌리를 찾는다. 부모 없고 `leaf`가 아닌 열린 이슈 중 뿌리 템플릿 칸(`## 기획 문서` 등)이 하나라도 있는 것의 번호 배열이 나온다. 하나도 없으면 새 뿌리를 세우자고(`/kagami:plan`) 알리고 끝낸다
+- 뿌리마다 `--root`를 붙여 다시 부른다. 스크립트는 GitHub를 읽기만 한다
 
 ```bash
+node "${CLAUDE_PLUGIN_ROOT}/src/next.ts" --repo R
 node "${CLAUDE_PLUGIN_ROOT}/src/next.ts" --repo R --root <뿌리>
 ```
 
@@ -23,14 +24,14 @@ node "${CLAUDE_PLUGIN_ROOT}/src/next.ts" --repo R --root <뿌리>
 - `ready`: 준비된 일 `{number, kind}`. kind는 `build`(잎 구현), `split`(자식 없는 노드 쪼개기. 뿌리면 큰 가지로 쪼개기), `plan`(칸이 빠진 뿌리 기획 대화), `try`(잎이 다 닫힌 큰 가지 확인)
 - `stale`: 할당된 채 3일 동안 활동이 없는 이슈
 - `waiting`: `needs-decision` 라벨이 붙은 열린 이슈
-- `drift`: 있으면 `R`의 AGENTS.md 첫 줄 kagami 버전(`repo`)과 플러그인 버전(`plugin`)이 다르다. `repo`가 없으면 버전 줄이 없다
+- `drift`: 있으면 `R`의 AGENTS.md 첫 줄 kagami 버전(`repo`)과 플러그인 버전(`plugin`)이 다르다. `repo`가 없으면 버전 줄이 없다. `dev: false`면 `R`에 dev 브랜치가 없다
 - `leftover`: 준비된 일마다 남은 잎 브랜치(`leaf/<번호>-*`)
 
 ## 1. 정리
 
 추천하기 전에 한다.
 
-- **drift**: 있으면 한 줄로 알린다. 예: "AGENTS.md는 kagami v0.1.0, 플러그인은 v0.2.0이에요." `repo`가 없으면 "AGENTS.md에 kagami 버전 줄이 없어요"라고 알린다. 고치지 않고 넘어간다
+- **drift**: 있으면 한 줄로 알린다. 예: "AGENTS.md는 kagami v0.1.0, 플러그인은 v0.2.0이에요." `repo`가 없으면 "AGENTS.md에 kagami 버전 줄이 없어요"라고 알린다. `dev: false`면 "dev 브랜치가 없어요. `/kagami:init`으로 깐 저장소인지 봐 주세요"라고 알린다. 고치지 않고 넘어간다
 - **waiting**: 이슈마다 `gh issue view <번호> -R R --comments`로 마지막 `**needs-decision**` 기록과 그 뒤 댓글을 읽는다. 누가 썼든 답으로 본다
   - 답이 있으면 한 줄로 확인한다. 예: "#12는 ②로 답했어요(이유: …). 맞나요?" 맞으면 그 `**needs-decision**` 댓글 끝에 ` → **answer** <고른 것> (사람). 이유: …`를 이어 쓰고(`gh api -X PATCH repos/R/issues/comments/<id> -f body=…`, 고칠 수 없으면 `**answer**`로 시작하는 새 댓글) `gh issue edit <번호> -R R --remove-label needs-decision`
   - 답이 없으면 물은 것과 선택지를 다시 보여 주고 묻는다. 답하면 위와 같이 남긴다. 지금 답하지 않으면 그대로 둔다
