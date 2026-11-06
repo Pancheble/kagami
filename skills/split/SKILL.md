@@ -4,7 +4,7 @@ description: "Break a large issue into small ones that each fit in one session. 
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/to-tickets/SKILL.md`. 라이선스 전문: `skills/LICENSE-mattpocock`.
+> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/to-tickets/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
 > 고친 점: 계획·대화가 아니라 노드 이슈 하나를 쪼갠다. 안을 하나 내고 고쳐 가는 대신 안 2~3개를 득실과 함께 내고 사람이 고른다. 잎 템플릿을 AGENTS.md의 목표·지킬 약속·끝 기준·범위로 바꾸고, 범위에 파일 경로를 적는다(원문은 경로를 피한다). `contracts/<노드>/`의 빨간 계약 테스트를 PR로 먼저 넣고, 머지된 뒤에 잎 이슈를 만든다. 브랜치를 `leaf/<노드>-split`으로 옮기고, 머지에 `--subject`를 붙인다. kagami 플러그인으로 옮기며 이름을 split으로 바꾸고, 칸이 다 있고 자식이 없는 뿌리를 큰 가지로 쪼개는 길을 더했다. `/setup-matt-pocock-skills`, 로컬 파일 방식, `ready-for-agent` 라벨은 뺐다. 수직 조각과 넓은 리팩터의 병렬 변경은 원문을 따른다.
 
 AGENTS.md "한 번 일하는 순서" 5의 쪼개기다. 규칙은 AGENTS.md가 기준이고 여기에 다시 쓰지 않는다. 볼 절: "쪼개기", "잎 크기", "계약 테스트", "기록 형식"의 `**split**`, "할당".

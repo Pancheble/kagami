@@ -4,7 +4,7 @@ description: "Test-first loop (red → green → refactor) that /kagami:build ru
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`. 라이선스 전문: `skills/LICENSE-mattpocock`.
+> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
 > 고친 점: 없는 스킬(`codebase-design`, `code-review`) 의존과 GLOSSARY.md를 빼고, ADR은 뿌리 이슈의 "스택과 ADR", 리팩터링은 평가자 판정 전으로 옮겼다. kagami 플러그인으로 옮기며 이름을 test로 바꿨다. 나머지는 원문 그대로다.
 
 # Test-Driven Development

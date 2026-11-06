@@ -4,7 +4,7 @@ description: "Implement one kagami leaf issue test-first, get the evaluator's ve
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/implement/SKILL.md`. 라이선스 전문: `skills/LICENSE-mattpocock`.
+> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/implement/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
 > 고친 점: `/code-review`를 평가자 에이전트 판정으로 바꾸고, AGENTS.md의 계획 알림·멈춤 조건·PR 형식에 맞췄다. 시작할 때 `leaf/<번호>-` 브랜치로 옮기는 단계를 넣었다. kagami 플러그인으로 옮기며 이름을 build로, 부르는 tdd를 test로 바꿨다.
 
 인자: 잎 이슈 번호. 사람이 준 잎 이슈를 구현한다. 규칙은 `AGENTS.md`가 기준이고, 여기는 구현 단계(AGENTS.md "한 번 일하는 순서" 6~9)를 한 자리에 모은 것이다.
