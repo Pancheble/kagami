@@ -1,7 +1,7 @@
 {
 	"name": "kagami",
 	"version": "0.0.0",
-	"description": "사람이 흐름을 쥐는 가운데 방식 하네스: GitHub 이슈 트리, 테스트부터 쓰는 잎, 평가자 판정",
+	"description": "A Claude Code workflow where you choose and AI builds. Work is split into GitHub issues, each built test-first, and you try the result before it ships.",
 	"author": { "name": "baekchan" },
 	"repository": "https://github.com/Pancheble/kagami",
 	"license": "MIT"

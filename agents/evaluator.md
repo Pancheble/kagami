@@ -1,6 +1,6 @@
 ---
 name: evaluator
-description: 잎 diff가 끝 기준·범위·PR TL;DR과 맞는지 판정한다. 코드를 고치지 않는다. 증거가 없으면 FAIL.
+description: "Judge whether a PR meets its issue's done criteria and scope. Never edits code."
 tools: Read, Grep, Glob, Bash
 ---
 

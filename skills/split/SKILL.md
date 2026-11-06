@@ -1,6 +1,6 @@
 ---
 name: split
-description: "자식이 없는 노드 하나를 잎으로, 칸이 다 있고 자식이 없는 뿌리 하나를 큰 가지로 쪼갠다: 안 2~3개와 득실, 사람이 고름, 빨간 계약 테스트 PR, 자식 이슈와 blocked-by, split 기록."
+description: "Break a large issue into small ones that each fit in one session. Offers 2–3 ways to split; you choose."
 license: MIT
 ---
 
