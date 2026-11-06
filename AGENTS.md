@@ -83,7 +83,6 @@ Decide: (있을 때만) 선택지 2~3개, 좋은 점/대가, 추천 하나
    - **괜찮다:** 그 커밋에 릴리즈 태그 `v*`를 달고 GitHub Release를 만든다(설명은 그 가지 잎들의 PR 제목). 큰 가지를 닫는다
    - **고칠 게 있다:** 큰 가지 아래 새 잎을 만든다
    - **원한 게 달랐다:** 명세를 바꾸는 안을 `needs-decision`으로 올린다
-5. 전부 수락 회차에서 "괜찮다"가 아닌 첫 답이면 큰 가지 이슈에 `**not-what-i-wanted**`를 남긴다
 
 첫 릴리즈는 `v1.0.0`이다. `v1.0.0` 전에는 태그 없이 닫는다: 확인이 "괜찮다"여도 태그와 GitHub Release 없이 큰 가지만 닫는다.
 
@@ -120,7 +119,7 @@ Decided: 혼자 정한 것과 이유만
 
 ## 기록 형식
 
-기록은 이슈 댓글이고 첫 줄이 굵은 표시어로 시작한다. 본문은 한국어로 쓴다. 표시어마다 같은 이름의 라벨을 붙인다: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released`와 `not-what-i-wanted`는 표시어만 있고 라벨은 없다. `needs-decision`만 상태 라벨이라 답이 달리면 없앤다.
+기록은 이슈 댓글이고 첫 줄이 굵은 표시어로 시작한다. 본문은 한국어로 쓴다. 표시어마다 같은 이름의 라벨을 붙인다: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released`는 표시어만 있고 라벨은 없다. `needs-decision`만 상태 라벨이라 답이 달리면 없앤다.
 
 ```markdown
 **needs-decision** <물은 것> ① … ② … → **answer** <고른 것> (사람). 이유: …
@@ -131,7 +130,6 @@ Decided: 혼자 정한 것과 이유만
 **spec-gap** <무엇>. 찾은 곳: …
 **discovered** #<새 이슈> <무엇>. 찾은 곳: …
 **released** @<할당됐던 사람>. 이유: <3일 활동 없음 / PR 닫힘 / blocked>
-**not-what-i-wanted** <사람의 답>. <고칠 게 있다 / 원한 게 달랐다> → #…
 ```
 
 ## 끝내기 전에
