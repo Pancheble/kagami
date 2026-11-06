@@ -234,7 +234,7 @@ if (import.meta.main) {
 	});
 	if (!values.repo)
 		throw new Error(
-			"쓰는 법: node src/next.ts --repo <owner/name> [--root <뿌리 번호>]",
+			"Usage: node src/next.ts --repo <owner/name> [--root <root number>]",
 		);
 	if (!values.root) {
 		console.log(JSON.stringify(await roots(values.repo, sh)));

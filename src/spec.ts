@@ -40,23 +40,18 @@ function sections(body: string): Map<string, string> {
 }
 
 // 빠진 항목마다 한 줄. 비면 다 있다. 칸마다 영어 칸을 먼저, 없으면 옛 한국어 칸을 읽는다.
-// 알리는 칸 이름은 옛 한국어 칸이 하나라도 있으면 한국어, 아니면 영어
+// 알리는 칸 이름과 힌트는 늘 영어다(#107)
 export function check(body: string): string[] {
 	const s = sections(body);
-	const ko = ITEMS.some((k) => s.has(k));
-	const names = ko ? ITEMS : ITEMS_EN;
 	const get = (i: number) => s.get(ITEMS_EN[i]) ?? s.get(ITEMS[i]);
-	const [mark, see] = ko
-		? ["확인:", "CLAUDE.md 참고"]
-		: ["check:", "See CLAUDE.md"];
 	const missing: string[] = [];
-	names.forEach((item, i) => {
+	ITEMS_EN.forEach((item, i) => {
 		const text = get(i);
-		if (text === undefined) missing.push(`${item}: 칸이 없다`);
-		else if (!text) missing.push(`${item}: 비었다`);
+		if (text === undefined) missing.push(`${item}: missing`);
+		else if (!text) missing.push(`${item}: empty`);
 		else if (i === 2 && !text.includes("CLAUDE.md"))
 			missing.push(
-				`${item}: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "${see}"만 적는다`,
+				`${item}: the source of truth is Risk paths in CLAUDE.md. Write only "See CLAUDE.md" here`,
 			);
 	});
 	const criteria = get(1);
@@ -65,10 +60,10 @@ export function check(body: string): string[] {
 		.map((l) => l.match(/^(?:[-*]|\d+\.)\s+(.*)/)?.[1])
 		.filter((l) => l !== undefined);
 	if (criteria && !goals.length)
-		missing.push(`${names[1]}: 목록(- 기준 (${mark} 방법))이 없다`);
+		missing.push(`${ITEMS_EN[1]}: no list (- <criterion> (check: <how>))`);
 	goals.forEach((g, i) => {
 		if (!/check:|확인:/.test(g))
-			missing.push(`${names[1]} ${i + 1} "${g}": 확인 방법이 없다`);
+			missing.push(`${ITEMS_EN[1]} ${i + 1} "${g}": no check method`);
 	});
 	return missing;
 }
@@ -96,13 +91,13 @@ if (import.meta.main) {
 		},
 	});
 	if (!values.repo || !values.root)
-		throw new Error("--repo와 --root가 필요하다");
+		throw new Error("--repo and --root are required");
 	const root = num("--root", values.root, 1);
 	const missing = check(await readRoot(values.repo, root, sh));
-	if (!missing.length) console.log(`명세 점검 #${root}: 다 있다`);
+	if (!missing.length) console.log(`Spec check #${root}: nothing missing`);
 	else {
 		console.log(
-			`명세 점검 #${root}: 빠진 항목이 있다. 기획 대화로 돌아간다\n${missing.map((m) => `- ${m}`).join("\n")}`,
+			`Spec check #${root}: items missing. Go back to the planning conversation\n${missing.map((m) => `- ${m}`).join("\n")}`,
 		);
 		process.exitCode = 1;
 	}

@@ -88,7 +88,8 @@ function fake(agentsMd: () => string, dev = true) {
 		const path = args[args.length - 1];
 		if (path === `${R}/contents/AGENTS.md?ref=dev`) return agentsMd();
 		if (path === `${R}/branches/dev`) {
-			if (!dev) throw new Error("gh api 실패\ngh: Branch not found (HTTP 404)");
+			if (!dev)
+				throw new Error("gh api failed\ngh: Branch not found (HTTP 404)");
 			return JSON.stringify({ name: "dev" });
 		}
 		if (path in pages) {
@@ -125,19 +126,19 @@ test("collect: 준비된 일, 무활동 할당, 답 대기, 버전 차이, 남�
 
 test("collect: AGENTS.md가 없으면 버전 줄 없음으로, 다른 실패는 그대로 던진다", async () => {
 	const missing = fake(() => {
-		throw new Error("gh api 실패\ngh: Not Found (HTTP 404)");
+		throw new Error("gh api failed\ngh: Not Found (HTTP 404)");
 	});
 	const got = await collect("o/r", tree, missing.run, "0.1.0", NOW);
 	assert.deepEqual(got.drift, { repo: undefined, plugin: "0.1.0" });
 	const down = fake(() => {
-		throw new Error("gh api 실패\nconnection refused");
+		throw new Error("gh api failed\nconnection refused");
 	});
 	await assert.rejects(collect("o/r", tree, down.run, "0.1.0", NOW));
 });
 
 test("collect: AGENTS.md도 dev 브랜치도 없으면 버전 줄 없음이 아니라 dev 없음", async () => {
 	const missing = () => {
-		throw new Error("gh api 실패\ngh: Not Found (HTTP 404)");
+		throw new Error("gh api failed\ngh: Not Found (HTTP 404)");
 	};
 	const got = await collect(
 		"o/r",

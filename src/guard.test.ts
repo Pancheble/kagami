@@ -251,7 +251,7 @@ test("위험 경로 목록은 dev 쪽으로 계산하고, 목록을 바꾼 것 �
 	const head = { md: md(), pkg: "" };
 	assert.deepEqual(facts("M\tsrc/auth/a.js\nM\tCLAUDE.md", base, head).risk, [
 		"src/auth/a.js",
-		"CLAUDE.md의 위험 경로 목록",
+		"Risk paths list in CLAUDE.md",
 	]);
 	assert.deepEqual(facts("M\tCLAUDE.md", base, base).risk, []);
 });
@@ -353,9 +353,9 @@ test("CI 가드: 기존 계약 테스트를 고친 PR은 막힘을 보이고 체
 	assert.equal(r.code, 1, r.out);
 	assert.match(
 		r.out,
-		/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/mul\.contract\.js/m,
+		/^kagami guard: blocked — edited existing contract\/acceptance tests: contracts\/16\/mul\.contract\.js/m,
 	);
-	assert.match(r.summary, /지키는 검사: 막힘/);
+	assert.match(r.summary, /kagami guard: blocked/);
 });
 
 test("CI 가드: 래칫이 깨진 PR도 막힘, 안 깨뜨렸으면 통과(초록)", async () => {
@@ -363,13 +363,13 @@ test("CI 가드: 래칫이 깨진 PR도 막힘, 안 깨뜨렸으면 통과(초�
 	await broke.commit({ "src/mul.js": "export const mul = (a, b) => a + b;\n" });
 	const a = ci(broke.dir);
 	assert.equal(a.code, 1, a.out);
-	assert.match(a.out, /^지키는 검사: 막힘 — 래칫/m);
+	assert.match(a.out, /^kagami guard: blocked — ratchet/m);
 	const fine = await repo();
 	await fine.commit({ "README.md": "x\n" });
 	const b = ci(fine.dir);
 	assert.equal(b.code, 0, b.out);
-	assert.match(b.out, /^지키는 검사: 통과/m);
-	assert.match(b.out, /래칫: dev에서 초록 4개 중 깨진 것: 없음/);
+	assert.match(b.out, /^kagami guard: pass/m);
+	assert.match(b.out, /Ratchet: broken of 4 green on dev: None/);
 });
 
 test("CI 가드: 위험 경로를 건드린 PR은 초록에 경고로 사람이 볼 것을 보인다", async () => {
@@ -380,10 +380,10 @@ test("CI 가드: 위험 경로를 건드린 PR은 초록에 경고로 사람이 
 	await commit({ "ci/guard.yml": "x\n" });
 	const r = ci(dir);
 	assert.equal(r.code, 0, r.out);
-	assert.match(r.out, /^지키는 검사: 사람이 볼 것 있음 — /m);
+	assert.match(r.out, /^kagami guard: needs a human look — /m);
 	assert.match(r.out, /^::warning::/m);
 	assert.doesNotMatch(r.out, /\/승인/);
-	assert.match(r.out, /위험 경로:\n {2}- ci\/guard\.yml/);
+	assert.match(r.out, /Risk paths:\n {2}- ci\/guard\.yml/);
 });
 
 test("CI 가드: CLAUDE.md에 Risk paths 절이 없으면 막힘(빨강)", async () => {
@@ -393,7 +393,7 @@ test("CI 가드: CLAUDE.md에 Risk paths 절이 없으면 막힘(빨강)", async
 	assert.equal(a.code, 1, a.out);
 	assert.match(
 		a.out,
-		/^지키는 검사: 막힘 — CLAUDE\.md에 Risk paths 절이 없다/m,
+		/^kagami guard: blocked — CLAUDE\.md has no Risk paths section/m,
 	);
 	// CLAUDE.md가 아예 없어도 막힌다
 	const none = await repo();
@@ -402,7 +402,7 @@ test("CI 가드: CLAUDE.md에 Risk paths 절이 없으면 막힘(빨강)", async
 	assert.equal(b.code, 1, b.out);
 	assert.match(
 		b.out,
-		/^지키는 검사: 막힘 — CLAUDE\.md에 Risk paths 절이 없다/m,
+		/^kagami guard: blocked — CLAUDE\.md has no Risk paths section/m,
 	);
 });
 
@@ -411,25 +411,28 @@ const tidy = {
 	"contracts/16/mul.contract.js": contract("곱셈", "이름을 바꿈"),
 };
 const TLDR =
-	"Where: #22 › #40\nChanged: new issues 없음 / plan changes (직접) / contract changes contracts/16/mul.contract.js / risk paths touched 없음\n";
+	"Where: #22 › #40\nChanged: new issues None / plan changes None / contract changes contracts/16/mul.contract.js / risk paths touched None\n";
 
 test("CI 가드: contract-change 라벨과 TL;DR Changed에 그 파일이 둘 다 있으면 계약 수정은 표시만 하고 초록이다", async () => {
 	const { dir, commit } = await repo();
 	await commit(tidy);
 	const r = ci(dir, { labels: ["leaf", "contract-change"], body: TLDR });
 	assert.equal(r.code, 0, r.out);
-	assert.match(r.out, /^지키는 검사: 사람이 볼 것 있음 — /m);
-	assert.match(r.out, /계약 정리:\n {2}- contracts\/16\/mul\.contract\.js/);
+	assert.match(r.out, /^kagami guard: needs a human look — /m);
+	assert.match(
+		r.out,
+		/Contract cleanup:\n {2}- contracts\/16\/mul\.contract\.js/,
+	);
 	assert.match(r.out, /^::warning::/m);
 	// 고친 파일만 래칫에서 빠지고, 손대지 않은 old 계약 둘은 지킨다
-	assert.match(r.out, /래칫: dev에서 초록 2개 중 깨진 것: 없음/);
+	assert.match(r.out, /Ratchet: broken of 2 green on dev: None/);
 });
 
 test("CI 가드: 계약 수정에 라벨이나 TL;DR 중 하나라도 없으면 막힘(빨강)", async () => {
 	const { dir, commit } = await repo();
 	await commit(tidy);
 	for (const pr of [
-		{ labels: ["contract-change"], body: "Changed: contract changes 없음\n" },
+		{ labels: ["contract-change"], body: "Changed: contract changes None\n" },
 		{ labels: ["leaf"], body: TLDR },
 		undefined, // 이벤트 없음(로컬 실행)
 	]) {
@@ -437,7 +440,7 @@ test("CI 가드: 계약 수정에 라벨이나 TL;DR 중 하나라도 없으면 
 		assert.equal(r.code, 1, r.out);
 		assert.match(
 			r.out,
-			/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/mul\.contract\.js/m,
+			/^kagami guard: blocked — edited existing contract\/acceptance tests: contracts\/16\/mul\.contract\.js/m,
 		);
 	}
 });
@@ -452,7 +455,7 @@ test("CI 가드: 라벨과 TL;DR이 있어도 Changed에 적지 않은 계약, �
 	assert.equal(a.code, 1, a.out);
 	assert.match(
 		a.out,
-		/^지키는 검사: 막힘 — 기존 계약·인수 테스트를 고쳤다: contracts\/16\/old\.contract\.js$/m,
+		/^kagami guard: blocked — edited existing contract\/acceptance tests: contracts\/16\/old\.contract\.js$/m,
 	);
 	const accept = await repo();
 	await accept.commit({ "contracts/16/sq.accept.js": "// 지움\n" });
@@ -461,5 +464,5 @@ test("CI 가드: 라벨과 TL;DR이 있어도 Changed에 적지 않은 계약, �
 		body: "Changed: contract changes contracts/16/sq.accept.js\n",
 	});
 	assert.equal(b.code, 1, b.out);
-	assert.match(b.out, /^지키는 검사: 막힘 — .*sq\.accept\.js/m);
+	assert.match(b.out, /^kagami guard: blocked — .*sq\.accept\.js/m);
 });
