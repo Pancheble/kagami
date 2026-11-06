@@ -4,9 +4,10 @@
 # (pull_request는 PR 쪽 워크플로로 돈다). 그래서 사람이 머지 전에 이 파일의 diff를 본다.
 # 계약 정리: contract-change 라벨과 본문 TL;DR의 Changed 줄을 이벤트 payload에서 읽는다. 라벨·본문을 바꾸면 다시 돈다
 #
-# 까는 법(사람이 한다. 대상 저장소에서도 .github/workflows/는 위험 경로다):
-#   1. 이 파일을 대상 저장소의 .github/workflows/kagami-guard.yml로 복사해 사람 PR로 dev에 넣는다
-#   2. 저장소 비밀 KAGAMI_READ_TOKEN = Pancheble/kagami만 Contents: Read인 fine-grained 토큰(kagami가 비공개라서)
+# 까는 법: /kagami:init(src/init.ts)이 이 파일을 대상 저장소의 .github/workflows/kagami-guard.yml로 쓴다.
+#   그때 아래 kagami checkout의 repository·ref 줄을 대상 저장소가 고정할 kagami ref(.claude/settings.json과 같은 것)로 바꾼다.
+#   여기 적힌 dev ref는 손으로 복사할 때의 값이다(v1.0.0 전에는 태그가 없다). 대상 저장소에서도 .github/workflows/는 위험 경로다
+# 사람이 할 것: 저장소 비밀 KAGAMI_READ_TOKEN = Pancheble/kagami만 Contents: Read인 fine-grained 토큰(kagami가 비공개인 동안, #52 전)
 name: kagami guard
 
 on:
