@@ -18,8 +18,8 @@ test("version is the version in plugin.json", () => {
 
 test("stamp puts the version line first and leaves the rest as is", () => {
 	assert.equal(
-		stamp("# AGENTS.md\nbody\n", "0.0.0"),
-		"<!-- kagami v0.0.0 -->\n# AGENTS.md\nbody\n",
+		stamp("# AGENTS.md\n본문\n", "0.0.0"),
+		"<!-- kagami v0.0.0 -->\n# AGENTS.md\n본문\n",
 	);
 });
 

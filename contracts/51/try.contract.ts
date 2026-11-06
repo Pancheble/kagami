@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finish } from "../../src/try.ts";
 
-const TITLES = ["feat: plugin skeleton", "fix: next order"];
+const TITLES = ["feat: 플러그인 골격", "fix: next 순서"];
 
 test("no tag before v1.0.0", () => {
 	for (const v of ["0.0.0", "0.9.9"])
@@ -18,6 +18,6 @@ test("v<version> tag from v1.0.0", () => {
 test("Release description is one line per leaf PR title", () => {
 	assert.equal(
 		finish("1.0.0", TITLES).notes,
-		"- feat: plugin skeleton\n- fix: next order",
+		"- feat: 플러그인 골격\n- fix: next 순서",
 	);
 });
