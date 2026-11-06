@@ -32,7 +32,7 @@
 | branch | 끝 기준 | Done when |
 | branch | 써 볼 시나리오 | Try-it scenario |
 | node | 인수 테스트 | Acceptance test |
-| branch, node | 자식끼리의 약속 | Contracts between children |
+| branch, node | 자식끼리의 약속 | Child contracts |
 | branch, node | 바뀐 약속 | Contract changes |
 | leaf | 지킬 약속 | Contracts to keep |
 | leaf | 끝 기준 테스트 / 끝 기준 | Done when |
@@ -45,7 +45,7 @@
 
 | 한국어 | English |
 |---|---|
-| 가운데 (방식) | the middle way |
+| "가운데 방식으로 일한다" | "work the kagami workflow" (필요하면 "you choose, AI builds"). "가운데"를 이름으로 옮기지 않는다. 자율 다이얼(L1~L4)은 구현된 적이 없으니 본문에서 뺀다 |
 | 트리 · 뿌리 · 큰 가지 · 노드 · 잎 | tree · root · branch · node · leaf |
 | (git 브랜치) | 늘 "git branch", "leaf branch", 또는 `dev`로 쓴다. 맨 "branch"는 큰 가지다 |
 | 트렁크 | trunk |
@@ -57,7 +57,7 @@
 | 기획 대화 | planning conversation |
 | 계획 알림 | plan notice |
 | 끝 기준 | done criteria (칸 제목은 "Done when") |
-| 지킬 약속 · 자식끼리의 약속 | contracts to keep · contracts between children |
+| 지킬 약속 · 자식끼리의 약속 | contracts to keep · child contracts |
 | 계약 테스트 · 인수 테스트 | contract test · acceptance test |
 | 병렬 변경 | parallel change |
 | 수직 조각 | vertical slice |
@@ -66,7 +66,7 @@
 | 위험 경로 | risk paths |
 | 기록 · 표시어 | record · marker |
 | 사람 | the human |
-| 전부 수락 회차 | accept-all run |
+| 첫 실전 1회차 "전부 수락" · 2회차 "가운데" | accept-all run · normal run |
 | 괜찮다 / 고칠 게 있다 / 원한 게 달랐다 | it's fine / needs fixes / not what I wanted |
 | 막혔을 때 | when blocked |
 | "클리어해도 돼요" | "You can clear the session now." |
