@@ -4,7 +4,7 @@
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
-import { check, ITEMS } from "./spec.ts";
+import { check, ITEMS, ITEMS_EN } from "./spec.ts";
 import { readTree, type Tree } from "./tree.ts";
 import { stamped, version } from "./version.ts";
 
@@ -110,8 +110,9 @@ export function leftover(
 	return out;
 }
 
-// 뿌리: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸(spec.ts ITEMS의 ## 제목)이 하나라도 있는 것. 번호 순.
+// 뿌리: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸(spec.ts ITEMS_EN, 옛 한국어 칸 ITEMS의 ## 제목)이 하나라도 있는 것. 번호 순.
 // 칸이 빠진 뿌리(plan)도 센다. 칸이 하나도 없는 부모 없는 이슈(discovered 등)는 뿌리가 아니다
+const HEADS = [...ITEMS_EN, ...ITEMS];
 export async function roots(repo: string, run: Run): Promise<number[]> {
 	const list: { number: number; body: string }[] = JSON.parse(
 		await run("gh", [
@@ -134,7 +135,7 @@ export async function roots(repo: string, run: Run): Promise<number[]> {
 			i.body
 				.split(/^## /m)
 				.slice(1)
-				.some((p) => ITEMS.includes(p.split("\n")[0].trim())),
+				.some((p) => HEADS.includes(p.split("\n")[0].trim())),
 		)
 		.map((i) => i.number)
 		.sort((a, b) => a - b);

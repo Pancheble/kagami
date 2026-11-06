@@ -1,12 +1,22 @@
-// T12 명세 점검: 기획 대화(/plan-talk)가 끝날 때 뿌리 이슈에 뿌리 형식의 칸이 다 있는지 센다.
+// T12 명세 점검: 기획 대화(/kagami:plan)가 끝날 때 뿌리 이슈에 뿌리 형식의 칸이 다 있는지 센다.
 // 세기만 한다: 칸을 채우거나 내용이 맞는지 보지 않는다(내용은 큰 가지 확인에서 사람이 본다). 빠지면 기획 대화로 돌아간다.
-// 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목. "없음"은 사람이 정한 답으로 센다. 위험 경로만은 정본이 CLAUDE.md의
-// Risk paths라 "CLAUDE.md 참고"여야 한다("CLAUDE.md"가 있는지만 본다). 성공 기준은 목록 한 줄마다
-// "(확인: <방법>)"이 있어야 한다(큰 가지 확인에서 평가자가 돌려볼 수 있게)
+// 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목(ITEMS_EN). 옛 한국어 칸(ITEMS)도 읽는다(#93 병렬 변경 1단계).
+// "None"(옛 "없음")은 사람이 정한 답으로 센다. Risk paths만은 정본이 CLAUDE.md의 Risk paths라 "See CLAUDE.md"여야 한다
+// ("CLAUDE.md"가 있는지만 본다). Success criteria는 목록 한 줄마다 "(check: <방법>)"(옛 "확인:")이 있어야 한다
+// (큰 가지 확인에서 평가자가 돌려볼 수 있게)
 // 실행: node src/spec.ts --repo <대상 저장소> --root <뿌리> (사람 gh 계정으로 돈다). 빠진 게 있으면 종료 코드 1
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
 
+export const ITEMS_EN = [
+	"Plan document",
+	"Success criteria",
+	"Risk paths",
+	"Evaluator setup",
+	"Stack and ADRs",
+	"Out of scope",
+];
+// 옛 한국어 칸. ITEMS_EN과 같은 순서. 옛 칸 읽기를 지우는 병렬 변경 3단계에서 지운다
 export const ITEMS = [
 	"기획 문서",
 	"성공 기준",
@@ -29,28 +39,36 @@ function sections(body: string): Map<string, string> {
 	return out;
 }
 
-// 빠진 항목마다 한 줄. 비면 다 있다
+// 빠진 항목마다 한 줄. 비면 다 있다. 칸마다 영어 칸을 먼저, 없으면 옛 한국어 칸을 읽는다.
+// 알리는 칸 이름은 옛 한국어 칸이 하나라도 있으면 한국어, 아니면 영어
 export function check(body: string): string[] {
 	const s = sections(body);
+	const ko = ITEMS.some((k) => s.has(k));
+	const names = ko ? ITEMS : ITEMS_EN;
+	const get = (i: number) => s.get(ITEMS_EN[i]) ?? s.get(ITEMS[i]);
+	const [mark, see] = ko
+		? ["확인:", "CLAUDE.md 참고"]
+		: ["check:", "See CLAUDE.md"];
 	const missing: string[] = [];
-	for (const item of ITEMS) {
-		const text = s.get(item);
+	names.forEach((item, i) => {
+		const text = get(i);
 		if (text === undefined) missing.push(`${item}: 칸이 없다`);
 		else if (!text) missing.push(`${item}: 비었다`);
-		else if (item === "위험 경로" && !text.includes("CLAUDE.md"))
+		else if (i === 2 && !text.includes("CLAUDE.md"))
 			missing.push(
-				'위험 경로: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "CLAUDE.md 참고"만 적는다',
+				`${item}: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "${see}"만 적는다`,
 			);
-	}
-	const goals = (s.get("성공 기준") ?? "")
+	});
+	const criteria = get(1);
+	const goals = (criteria ?? "")
 		.split("\n")
 		.map((l) => l.match(/^(?:[-*]|\d+\.)\s+(.*)/)?.[1])
 		.filter((l) => l !== undefined);
-	if (s.get("성공 기준") && !goals.length)
-		missing.push("성공 기준: 목록(- 기준 (확인: 방법))이 없다");
+	if (criteria && !goals.length)
+		missing.push(`${names[1]}: 목록(- 기준 (${mark} 방법))이 없다`);
 	goals.forEach((g, i) => {
-		if (!g.includes("확인:"))
-			missing.push(`성공 기준 ${i + 1} "${g}": 확인 방법이 없다`);
+		if (!/check:|확인:/.test(g))
+			missing.push(`${names[1]} ${i + 1} "${g}": 확인 방법이 없다`);
 	});
 	return missing;
 }

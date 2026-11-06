@@ -233,16 +233,21 @@ test("이슈 템플릿에 블록 목록의 칸이 다 있다", () => {
 		);
 	const node = read("node.md");
 	assert.match(node, /^labels: node$/m);
-	for (const h of ["목표", "인수 테스트", "자식끼리의 약속", "바뀐 약속"])
+	for (const h of [
+		"Goal",
+		"Acceptance test",
+		"Child contracts",
+		"Contract changes",
+	])
 		assert.match(node, new RegExp(`^## ${h}`, "m"), h);
 	const leaf = read("leaf.md");
 	assert.match(leaf, /^labels: leaf$/m);
 	for (const h of [
-		"목표",
-		"지킬 약속",
-		"끝 기준 테스트",
-		"범위",
-		"기다릴 티켓",
+		"Goal",
+		"Contracts to keep",
+		"Done when",
+		"Scope",
+		"Waits on",
 	])
 		assert.match(leaf, new RegExp(`^## ${h}`, "m"), h);
 });

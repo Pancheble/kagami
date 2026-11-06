@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { check, ITEMS, readRoot } from "./spec.ts";
+import { check, ITEMS_EN, readRoot } from "./spec.ts";
 
 const FULL = `## 기획 문서
 
@@ -40,7 +40,7 @@ test("빈 뿌리 템플릿은 항목마다 빠졌다고 알린다", () => {
 	);
 	assert.deepEqual(
 		check(template).map((m) => m.split(":")[0]),
-		ITEMS,
+		ITEMS_EN,
 	);
 });
 

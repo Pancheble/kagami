@@ -1,22 +1,22 @@
 ---
-name: 노드
-about: 잎으로 쪼갤 목표. 자식은 하위 이슈로 단다
+name: Node
+about: A goal to split into leaves. Children go under it as sub-issues
 title: ""
 labels: node
 ---
 
-## 목표
+## Goal
 
-<!-- 이 노드가 이루려는 것. "무엇을"은 사람만 바꾼다 -->
+<!-- What this node sets out to do. Only the human changes the "what" -->
 
-## 인수 테스트
+## Acceptance test
 
-<!-- 목표를 확인하는 테스트 경로와 돌리는 명령. 재계획은 이걸 고칠 수 없다 -->
+<!-- Path to the test that checks the goal, and the command to run it. Replanning can't change this -->
 
-## 자식끼리의 약속
+## Child contracts
 
-<!-- 자식들이 서로 기대는 인터페이스와 그걸 지키는 계약 테스트 경로 -->
+<!-- Interfaces the children rely on from each other, and the contract tests that keep them -->
 
-## 바뀐 약속
+## Contract changes
 
-<!-- 여기는 비워 둔다. 약속을 바꾼 잎마다 이 이슈에 `**contract-change** #<잎>이 <무엇을> <넓힘/병렬 변경 몇 단계>. PR #…` 댓글을 남기고 `contract-change` 라벨을 붙인다(AGENTS.md "기록 형식"). 본문을 고치지 않아 여러 잎이 동시에 써도 부딪히지 않는다 -->
+<!-- Leave this empty. Each leaf that changes a contract leaves a `**contract-change** #<leaf> <what> <widened / parallel change step n>. PR #…` comment on this issue and adds the `contract-change` label (the record format in AGENTS.md). The body isn't edited, so several leaves can write at once without clashing -->
