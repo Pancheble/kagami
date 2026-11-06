@@ -33,7 +33,7 @@ argument-hint: "[잎 이슈 번호]"
 
 ## 커밋과 PR
 
-- 작업을 현재 잎 브랜치에 커밋하고 push한다. dev와 main에 직접 push하지 않는다
+- 작업을 현재 잎 브랜치에 커밋하고 push한다. dev에 직접 push하지 않는다
 - PR은 dev로 연다. 제목은 Conventional Commits(`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), 본문 맨 위에 AGENTS.md "PR TL;DR 형식"의 TL;DR, 그 아래 `Closes #<잎 번호>`
 - `Changed`는 `git diff`와 `gh`로 세서 채우고, `Decided`만 직접 쓴다
 - 머지는 이 스킬이 하지 않는다. CI가 초록이면 TL;DR을 보여 주고 사람의 동의를 기다린다(AGENTS.md 10~11)

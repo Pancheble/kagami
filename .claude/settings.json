@@ -10,8 +10,8 @@
 			"Read(./.env)",
 			"Read(./.env.*)",
 			"Read(!.env.example)",
-			"Bash(git push origin main)",
-			"Bash(git push origin HEAD:main)"
+			"Bash(git push origin dev)",
+			"Bash(git push origin HEAD:dev)"
 		]
 	}
 }
