@@ -15,8 +15,8 @@
 
 # Risk paths (여기 걸리면 동작 시나리오를 써서 사람 승인)
 
-- `.claude/settings.json`, `.claude/agents/`
-- `.github/workflows/`
+- `.github/workflows/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.env*` (kagami:init이 까는 기본값)
+- `.claude/settings.json`, `.claude/agents/` (`.claude/`에 들지만 따로 적어 둔다)
 - `ci/` (대상 저장소에 까는 워크플로. 팀 저장소의 CI가 된다)
 - `src/run.ts` (명령 실행 sh와, 가드가 대상 저장소 코드를 인증 없이 돌리는 noKey)
 - `src/guard.ts` (CI 가드: PR마다 계약 수정·래칫·위험 경로를 판정해 빨강·초록·표시로 보인다)

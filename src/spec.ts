@@ -1,6 +1,7 @@
 // T12 명세 점검: 기획 대화(/plan-talk)가 끝날 때 뿌리 이슈에 뿌리 형식의 칸이 다 있는지 센다.
 // 세기만 한다: 칸을 채우거나 내용이 맞는지 보지 않는다(내용은 큰 가지 확인에서 사람이 본다). 빠지면 기획 대화로 돌아간다.
-// 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목. "없음"은 사람이 정한 답으로 센다. 성공 기준은 목록 한 줄마다
+// 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목. "없음"은 사람이 정한 답으로 센다. 위험 경로만은 정본이 CLAUDE.md의
+// Risk paths라 "CLAUDE.md 참고"여야 한다("CLAUDE.md"가 있는지만 본다). 성공 기준은 목록 한 줄마다
 // "(확인: <방법>)"이 있어야 한다(큰 가지 확인에서 평가자가 돌려볼 수 있게)
 // 실행: node src/spec.ts --repo <대상 저장소> --root <뿌리> (사람 gh 계정으로 돈다). 빠진 게 있으면 종료 코드 1
 import { parseArgs } from "node:util";
@@ -36,6 +37,10 @@ export function check(body: string): string[] {
 		const text = s.get(item);
 		if (text === undefined) missing.push(`${item}: 칸이 없다`);
 		else if (!text) missing.push(`${item}: 비었다`);
+		else if (item === "위험 경로" && !text.includes("CLAUDE.md"))
+			missing.push(
+				'위험 경로: 정본은 CLAUDE.md의 Risk paths다. 여기엔 "CLAUDE.md 참고"만 적는다',
+			);
 	}
 	const goals = (s.get("성공 기준") ?? "")
 		.split("\n")
