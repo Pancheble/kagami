@@ -6,8 +6,11 @@
 
 - 기록 표시어와 라벨 이름: `**needs-decision**`, `**answer**`, `**split**`, `**contract-change**`, `**blocked**`, `**off-recommendation**`, `**spec-gap**`, `**discovered**`, `**released**`, `**not-what-i-wanted**`, 라벨 `node`, `leaf`
 - 명령·경로·브랜치 이름: `/kagami:*`, `kagami:evaluator`, `leaf/<n>-<name>`, `dev`, `v*`, `archive/*`, `contracts/<n>/`
-- 파일 이름 `docs/harness/가운데 설계.md`와 `docs/harness/archive/`의 파일 이름(D2: 이름 유지. `contracts/51/plugin.accept.ts`가 읽는다)
 - 출처 줄의 원문 경로와 URL(mattpocock/skills, cwc-long-running-agents)
+
+## 파일 이름
+
+새로 만들거나 옮기는 파일·폴더 이름은 영어 소문자-하이픈(`docs.contract.ts`). 설계 문서의 최종 이름과 `docs/harness/archive/`를 어디로 옮길지(또는 지우고 `archive/*` 태그로만 남길지)는 T2에서 사람에게 묻는다. 정해지면 이 표에 더한다(계약 넓힘). 옛 경로 `docs/harness/가운데 설계.md`는 Z가 지울 때까지 영어 포인터로 남는다
 
 ## AGENTS.md "기록 형식"에 넣을 문장
 

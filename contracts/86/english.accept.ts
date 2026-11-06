@@ -1,7 +1,7 @@
-// #86 인수 테스트(큰 가지 목표): 본문이 영어고(용어표 contracts/86/glossary.md), 기록 표시어는 그대로, 옛 스킬 이름이 없다. T1·T2·H가 끝나야 초록
+// #86 인수 테스트(큰 가지 목표): 본문이 영어고(용어표 contracts/86/glossary.md), 기록 표시어는 그대로, 옛 스킬 이름이 없다. T1·T2·H가 끝나야 초록. 설계 문서 이름은 T2에서 바뀌므로 파일 이름 예외는 없다
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -12,16 +12,12 @@ const walk = (p: string): string[] =>
 		? readdirSync(join(ROOT, p)).flatMap((e) => walk(join(p, e)))
 		: [p];
 const HANGUL = /[가-힣]/;
-// 예외(D2): docs/harness의 파일 이름은 그대로 둔다
-const NAMES = walk("docs/harness").map((f) => basename(f));
 const hangul = (paths: string[]) =>
 	paths.flatMap(walk).flatMap((f) =>
 		read(f)
 			.split("\n")
 			.map((line, i) => [line, i] as const)
-			.filter(([line]) =>
-				HANGUL.test(NAMES.reduce((l, n) => l.replaceAll(n, ""), line)),
-			)
+			.filter(([line]) => HANGUL.test(line))
 			.map(([line, i]) => `${relative(".", f)}:${i + 1}: ${line}`),
 	);
 
@@ -30,8 +26,8 @@ test("T1: 스킬·평가자·AGENTS.md·CONTRIBUTING.md 본문에 한글이 없�
 	assert.deepEqual(hits.slice(0, 5), [], `${hits.length}줄`);
 });
 
-test("T2: docs/harness/ 본문에 한글이 없다 (파일 이름 예외)", () => {
-	const hits = hangul(["docs/harness"]);
+test("T2: docs/ 본문에 한글이 없다 (예외 없음. 옛 경로 포인터도 영어)", () => {
+	const hits = hangul(["docs"]);
 	assert.deepEqual(hits.slice(0, 5), [], `${hits.length}줄`);
 });
 
