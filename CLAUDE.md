@@ -2,7 +2,7 @@
 
 # Project
 
-가운데 방식으로 일한다. 규칙은 위에서 불러온 `AGENTS.md`, 이유는 `docs/harness/가운데 설계.md`를 본다.
+kagami 방식(the kagami workflow)으로 일한다. 규칙은 위에서 불러온 `AGENTS.md`, 이유는 `docs/design.md`를 본다.
 
 # Commands
 

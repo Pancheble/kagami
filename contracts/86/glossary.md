@@ -12,6 +12,14 @@
 
 새로 만들거나 옮기는 파일·폴더 이름은 영어 소문자-하이픈(`docs.contract.ts`). 설계 문서의 최종 이름과 `docs/harness/archive/`를 어디로 옮길지(또는 지우고 `archive/*` 태그로만 남길지)는 T2에서 사람에게 묻는다. 정해지면 이 표에 더한다(계약 넓힘). 옛 경로 `docs/harness/가운데 설계.md`는 Z가 지울 때까지 영어 포인터로 남는다
 
+T2에서 정함(사람, #91 **answer**):
+
+| 옛 | 새 |
+|---|---|
+| `docs/harness/가운데 설계.md` | `docs/design.md` |
+| 뿌리 #49 "스택과 ADR" | `docs/adr/NNNN-<name>.md` (0001부터) |
+| `docs/harness/archive/` 3개 | 지움. 원문은 태그 `archive/stage0-autonomy`에만. 옮길 이야기는 `docs/history/stage-0.md`에 영어 요약 |
+
 ## AGENTS.md "기록 형식"에 넣을 문장
 
 > Markers and label names stay exactly as written. Write the record body in the language your team uses.
