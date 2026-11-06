@@ -48,6 +48,7 @@ test("${name} 둘", () => assert.equal(mul(-2, 5), -10));
 async function repo() {
 	const dir = mkdtempSync(join(tmpdir(), "guard-"));
 	write(dir, {
+		"CLAUDE.md": "# Risk paths\n", // 절이 없으면 가드가 막는다
 		"src/mul.js": "export const mul = (a, b) => a * b;\n",
 		"src/sq.js":
 			'export function sq() { throw new Error("not implemented"); }\n',
@@ -255,6 +256,14 @@ test("위험 경로 목록은 dev 쪽으로 계산하고, 목록을 바꾼 것 �
 	assert.deepEqual(facts("M\tCLAUDE.md", base, base).risk, []);
 });
 
+test("Risk paths의 `.env*`가 `.env`·`.env.local` 변경을 위험 경로로 센다 (`*`는 `/`를 넘지 않는다)", () => {
+	const side = { md: md(".env*", "src/auth/"), pkg: "" };
+	const status = ["M\t.env", "A\t.env.local", "M\tsrc/.env", "M\tenv"].join(
+		"\n",
+	);
+	assert.deepEqual(facts(status, side, side).risk, [".env", ".env.local"]);
+});
+
 test("보안 계산 검사: 바뀐 코드 파일을 Biome security 규칙으로 본다", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "sec-"));
 	write(dir, {
@@ -375,6 +384,26 @@ test("CI 가드: 위험 경로를 건드린 PR은 초록에 경고로 사람이 
 	assert.match(r.out, /^::warning::/m);
 	assert.doesNotMatch(r.out, /\/승인/);
 	assert.match(r.out, /위험 경로:\n {2}- ci\/guard\.yml/);
+});
+
+test("CI 가드: CLAUDE.md에 Risk paths 절이 없으면 막힘(빨강)", async () => {
+	const gone = await repo();
+	await gone.commit({ "CLAUDE.md": "# Project\n" });
+	const a = ci(gone.dir);
+	assert.equal(a.code, 1, a.out);
+	assert.match(
+		a.out,
+		/^지키는 검사: 막힘 — CLAUDE\.md에 Risk paths 절이 없다/m,
+	);
+	// CLAUDE.md가 아예 없어도 막힌다
+	const none = await repo();
+	await none.commit({}, ["CLAUDE.md"]);
+	const b = ci(none.dir);
+	assert.equal(b.code, 1, b.out);
+	assert.match(
+		b.out,
+		/^지키는 검사: 막힘 — CLAUDE\.md에 Risk paths 절이 없다/m,
+	);
 });
 
 // 계약 정리: 기존 계약을 고치는 PR. mul의 테스트 이름을 바꾸면 dev에서 초록이던 이름이 사라진다(래칫이 볼 일)
