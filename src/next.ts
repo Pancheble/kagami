@@ -1,7 +1,12 @@
 // #51 잎 2·3: /kagami:next가 세션을 열 때 보는 것. 고르기와 추천은 CC가 한다. 여기서는 세기만 한다
 // 잎 2: ready(준비된 일과 종류). 잎 3: stale, waiting, drift, leftover와 CLI
 // 계약: contracts/51/ready.contract.ts, contracts/51/next.contract.ts
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { num, type Run, sh } from "./run.ts";
 import { check } from "./spec.ts";
+import { readTree, type Tree } from "./tree.ts";
+import { stamped, version } from "./version.ts";
 
 export type State = "open" | "closed";
 // tree.ts Tree에서 쓰는 칸만. Tree를 그대로 넘길 수 있다(tree.test.ts가 타입으로 확인)
@@ -58,27 +63,137 @@ const allClosed = (l: Issue[]) =>
 export type Activity = Record<number, string>;
 
 // 할당된 열린 이슈 중 마지막 활동이 now보다 3일(72시간) 넘게 앞선 것. activity에 없는 이슈는 판정하지 않는다
-export function stale(_root: Issue, _activity: Activity, _now: Date): number[] {
-	throw new Error("not implemented");
+export function stale(root: Issue, activity: Activity, now: Date): number[] {
+	return all(root)
+		.filter(
+			(i) =>
+				i.state === "open" &&
+				i.assignees.length &&
+				activity[i.number] &&
+				now.getTime() - Date.parse(activity[i.number]) > 72 * 3600_000,
+		)
+		.map((i) => i.number);
 }
 
 // 열린 이슈 중 needs-decision 라벨이 붙은 것
-export function waiting(_root: Issue): number[] {
-	throw new Error("not implemented");
+export function waiting(root: Issue): number[] {
+	return all(root)
+		.filter((i) => i.state === "open" && i.labels.includes("needs-decision"))
+		.map((i) => i.number);
 }
+
+const all = <T extends { children: T[] }>(i: T): T[] => [
+	i,
+	...i.children.flatMap(all),
+];
 
 // 대상 저장소 AGENTS.md 첫 줄의 버전(version.ts stamped)과 플러그인 버전이 다르면 둘을 낸다. 같으면 undefined
 export function drift(
-	_agentsMd: string,
-	_plugin: string,
+	agentsMd: string,
+	plugin: string,
 ): { repo?: string; plugin: string } | undefined {
-	throw new Error("not implemented");
+	// stamped는 줄 끝이 \n일 때만 읽는다. CRLF와 한 줄짜리 파일도 읽게 맞춰 넘긴다
+	const repo = stamped(`${agentsMd.replace(/\r\n/g, "\n")}\n`);
+	return repo === plugin ? undefined : { repo, plugin };
 }
 
 // 이슈마다 남은 잎 브랜치(leaf/<번호>-*). branches는 브랜치 이름 목록(refs/heads/·origin/ 없이). 없는 이슈는 빼고 낸다
 export function leftover(
-	_numbers: number[],
-	_branches: string[],
+	numbers: number[],
+	branches: string[],
 ): Record<number, string[]> {
-	throw new Error("not implemented");
+	const out: Record<number, string[]> = {};
+	for (const n of numbers) {
+		const b = branches.filter((x) => x.startsWith(`leaf/${n}-`));
+		if (b.length) out[n] = b;
+	}
+	return out;
+}
+
+// CLI가 모으는 것. GitHub를 읽기만 하고 쓰지 않는다. plugin은 플러그인 버전
+// 활동은 할당된 열린 이슈만 모은다(stale이 그것만 본다). 잎 브랜치 푸시는 브랜치 머리 커밋의 커밋 시각으로 본다
+// ponytail: 이슈 이벤트와 PR은 100개까지(PR은 최근 갱신 순). 넘으면 페이지 넘기기를 붙인다
+export async function collect(
+	repo: string,
+	tree: Tree,
+	run: Run,
+	plugin: string,
+	now: Date,
+) {
+	const R = `repos/${repo}`;
+	const api = async (path: string) =>
+		JSON.parse(await run("gh", ["api", path]));
+	const refs: { ref: string; object: { sha: string } }[] = await api(
+		`${R}/git/matching-refs/heads/leaf/`,
+	);
+	const sha = new Map(
+		refs.map((r) => [r.ref.replace("refs/heads/", ""), r.object.sha]),
+	);
+	const branches = [...sha.keys()];
+	const pulls: { head: { ref: string }; updated_at: string }[] = await api(
+		`${R}/pulls?state=all&sort=updated&direction=desc&per_page=100`,
+	);
+	const activity: Activity = {};
+	for (const i of all(tree)) {
+		if (i.state !== "open" || !i.assignees.length) continue;
+		const mine = leftover([i.number], branches)[i.number] ?? [];
+		const events: { event: string; created_at: string }[] = await api(
+			`${R}/issues/${i.number}/events?per_page=100`,
+		);
+		const times = [
+			...events.filter((e) => e.event === "assigned").map((e) => e.created_at),
+			...i.comments.map((c) => c.createdAt),
+			...pulls
+				.filter((p) => p.head.ref.startsWith(`leaf/${i.number}-`))
+				.map((p) => p.updated_at),
+		];
+		for (const b of mine)
+			times.push(
+				(await api(`${R}/commits/${sha.get(b)}`)).commit.committer.date,
+			);
+		if (times.length)
+			activity[i.number] = new Date(
+				Math.max(...times.map((t) => Date.parse(t))),
+			).toISOString();
+	}
+	const md = await run("gh", [
+		"api",
+		"-H",
+		"Accept: application/vnd.github.raw",
+		`${R}/contents/AGENTS.md?ref=dev`,
+	]).catch((e: Error) => {
+		if (e.message.includes("HTTP 404")) return "";
+		throw e;
+	});
+	const r = ready(tree);
+	return {
+		ready: r,
+		stale: stale(tree, activity, now),
+		waiting: waiting(tree),
+		drift: drift(md, plugin),
+		leftover: leftover(
+			r.map((x) => x.number),
+			branches,
+		),
+	};
+}
+
+// node src/next.ts --repo <owner/name> --root <뿌리 번호> → {ready, stale, waiting, drift?, leftover} JSON
+if (import.meta.main) {
+	const { values } = parseArgs({
+		options: { repo: { type: "string" }, root: { type: "string" } },
+	});
+	if (!values.repo || !values.root)
+		throw new Error(
+			"쓰는 법: node src/next.ts --repo <owner/name> --root <뿌리 번호>",
+		);
+	const tree = await readTree(values.repo, num("--root", values.root, 1), sh);
+	const plugin = version(fileURLToPath(new URL("..", import.meta.url)));
+	console.log(
+		JSON.stringify(
+			await collect(values.repo, tree, sh, plugin, new Date()),
+			null,
+			2,
+		),
+	);
 }
