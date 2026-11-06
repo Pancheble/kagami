@@ -1,6 +1,6 @@
 ---
 name: next
-description: "세션을 열 때 다음 일을 고른다: 답 대기 질문과 3일 무활동 할당을 정리하고, 준비된 일 중 성격이 다른 2~3개를 추천(자기 추천이 1번)한 뒤, 사람이 고른 일을 할당하고 그 역할의 스킬로 넘긴다."
+description: "At the start of a session, recommend 2–3 things to work on next and start the one you pick."
 license: MIT
 ---
 

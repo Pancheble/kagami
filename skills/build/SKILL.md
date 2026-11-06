@@ -1,6 +1,6 @@
 ---
 name: build
-description: "준비된 잎 이슈 하나를 구현한다: 계획 알림, 테스트부터, 평가자 판정, dev로 PR."
+description: "Implement one small issue test-first, run the checks, and open a PR."
 license: MIT
 ---
 

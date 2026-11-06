@@ -1,6 +1,6 @@
 ---
 name: plan
-description: 기획 대화. 사람이 원하는 것을 말로 풀고, AI가 셀프 그릴링과 조사로 기획 문서를 다듬은 뒤, 끝낼 때만 뿌리 이슈 형식으로 뽑고 명세 점검으로 빠진 칸을 센다. 새 뿌리를 세울 때, 칸이 빠진 뿌리를 골랐을 때, 큰 가지 확인에서 "원한 게 달랐다"가 나와 뿌리를 고칠 때 쓴다.
+description: "Turn what you want to build into a project goal issue through conversation. Use when starting a project or changing its goal."
 license: MIT
 disable-model-invocation: true
 ---

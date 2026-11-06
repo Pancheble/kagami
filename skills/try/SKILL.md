@@ -1,6 +1,6 @@
 ---
 name: try
-description: "잎이 다 닫힌 큰 가지 하나를 사람이 써 보고 확인한다: 평가자 확인, 실행 방법과 시나리오 안내, 답을 셋(괜찮다 / 고칠 게 있다 / 원한 게 달랐다)으로 나눠 되묻기, 닫기·새 잎·needs-decision."
+description: "Try a finished group of work yourself. If it's good, close it; if not, create the fixes."
 license: MIT
 ---
 

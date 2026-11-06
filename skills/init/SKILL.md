@@ -1,6 +1,6 @@
 ---
 name: init
-description: "빈 새 저장소에 kagami를 깐다: AGENTS.md(버전 줄), CONTRIBUTING.md, CLAUDE.md, .claude/settings.json(kagami ref 고정), 이슈 템플릿 넷, 가드 워크플로, 라벨 9개, dev 첫 커밋. push와 저장소 비밀은 사람이 한다."
+description: "Install kagami into a new empty repository: rules, issue templates, labels, and a CI guard in one go."
 license: MIT
 disable-model-invocation: true
 ---
