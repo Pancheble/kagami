@@ -1,21 +1,10 @@
 #!/bin/sh
-# main 직접 커밋을 막는 git hook. main은 dev에 있는 커밋으로, fast-forward로만 움직인다.
+# dev 직접 push를 막는 git hook. dev는 PR 머지(서버에서 일어나 이 hook을 거치지 않는다)로만 바뀐다.
 # 사람의 클론에 건다: git config core.hooksPath <kagami>/hooks
-# git push가 넘기는 줄(<로컬 ref> <로컬 sha> <원격 ref> <원격 sha>)에서 원격 ref가 main인 것만 본다.
-# dev는 원격 추적 ref(<원격>/dev)로 본다: push 전에 fetch해 둔다
-while read -r _ sha ref old; do
-	[ "$ref" = refs/heads/main ] || continue
-	case $sha in *[!0]*) ;; *)
-		echo "pre-push: main을 지우지 않는다" >&2
-		exit 1
-	esac
-	case $old in *[!0]*) new=;; *) new=1;; esac
-	if [ -z "$new" ] && ! git merge-base --is-ancestor "$old" "$sha" 2>/dev/null; then
-		echo "pre-push: main ${old}에서 ${sha}로는 fast-forward가 아니다" >&2
-		exit 1
-	fi
-	if ! git merge-base --is-ancestor "$sha" "refs/remotes/$1/dev" 2>/dev/null; then
-		echo "pre-push: main에는 dev 커밋만 fast-forward로 올린다. ${sha}는 $1/dev에 없다" >&2
+# git push가 넘기는 줄(<로컬 ref> <로컬 sha> <원격 ref> <원격 sha>)에서 원격 ref가 dev인 것을 거절한다. 지우기도 포함
+while read -r _ _ ref _; do
+	if [ "$ref" = refs/heads/dev ]; then
+		echo "pre-push: dev에는 직접 push하지 않는다. 잎 브랜치에서 PR로 합친다" >&2
 		exit 1
 	fi
 done
