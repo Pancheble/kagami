@@ -44,11 +44,7 @@ test("새 위치가 위험 경로다", () => {
 
 test("규칙 문서에 옛 스킬 이름과 옛 평가자 경로가 없다", () => {
 	components(ROOT);
-	for (const f of [
-		"AGENTS.md",
-		"CONTRIBUTING.md",
-		"docs/harness/가운데 설계.md",
-	]) {
+	for (const f of ["AGENTS.md", "CONTRIBUTING.md", "docs/design.md"]) {
 		const md = read(f);
 		assert.doesNotMatch(md, /`\/(implement|plan-talk|to-tickets|tdd)\b/, f);
 		assert.ok(!md.includes(".claude/agents/evaluator.md"), f);
