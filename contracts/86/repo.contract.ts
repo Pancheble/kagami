@@ -1,4 +1,4 @@
-// #86 잎 G의 약속: 저장소 .github 정리와 제3자 고지. PR 템플릿은 AGENTS.md "PR TL;DR 형식", mattpocock/skills 라이선스는 루트 THIRD_PARTY_NOTICES로
+// #86 leaf G's contract: repo .github cleanup and third-party notices. The PR template follows AGENTS.md "PR TL;DR format"; the mattpocock/skills license goes in the root THIRD_PARTY_NOTICES
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -13,24 +13,24 @@ const walk = (p: string): string[] =>
 		? readdirSync(join(ROOT, p)).flatMap((e) => walk(join(p, e)))
 		: [p];
 
-test("PR 템플릿: TL;DR 칸 Where·What·Changed·Decided가 있고 영어다", () => {
-	assert.ok(has(".github/PULL_REQUEST_TEMPLATE.md"), "PR 템플릿 없음");
+test("PR template: has the TL;DR fields Where, What, Changed and Decided, in English", () => {
+	assert.ok(has(".github/PULL_REQUEST_TEMPLATE.md"), "no PR template");
 	const md = read(".github/PULL_REQUEST_TEMPLATE.md");
 	for (const k of ["Where:", "What:", "Changed:", "Decided:"])
 		assert.ok(md.includes(k), k);
-	assert.ok(!/[가-힣]/.test(md), "한글");
+	assert.ok(!/[가-힣]/.test(md), "Hangul");
 });
 
-test("이슈 템플릿 설정 .github/ISSUE_TEMPLATE/config.yml에 blank_issues_enabled가 있다", () => {
-	assert.ok(has(".github/ISSUE_TEMPLATE/config.yml"), "config.yml 없음");
+test("issue template config .github/ISSUE_TEMPLATE/config.yml has blank_issues_enabled", () => {
+	assert.ok(has(".github/ISSUE_TEMPLATE/config.yml"), "no config.yml");
 	assert.match(
 		read(".github/ISSUE_TEMPLATE/config.yml"),
 		/^blank_issues_enabled: (true|false)$/m,
 	);
 });
 
-test("THIRD_PARTY_NOTICES: mattpocock/skills의 MIT 전문이 루트에 있고, 옛 skills/LICENSE-mattpocock과 그 참조가 없다", () => {
-	assert.ok(has("THIRD_PARTY_NOTICES"), "THIRD_PARTY_NOTICES 없음");
+test("THIRD_PARTY_NOTICES: the full MIT text of mattpocock/skills is at the root, and the old skills/LICENSE-mattpocock and references to it are gone", () => {
+	assert.ok(has("THIRD_PARTY_NOTICES"), "no THIRD_PARTY_NOTICES");
 	const n = read("THIRD_PARTY_NOTICES");
 	for (const k of [
 		"github.com/mattpocock/skills",

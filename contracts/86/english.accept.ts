@@ -1,4 +1,4 @@
-// #86 인수 테스트(큰 가지 목표): 본문이 영어고(용어표 contracts/86/glossary.md), 기록 표시어는 그대로, 옛 스킬 이름이 없다. T1·T2·H가 끝나야 초록. 설계 문서 이름은 T2에서 바뀌므로 파일 이름 예외는 없다
+// #86 acceptance test (branch goal): text is English (glossary contracts/86/glossary.md), record markers unchanged, no old skill names. Green once T1, T2 and H are done. The design doc is renamed in T2, so there is no file name exception
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -21,17 +21,17 @@ const hangul = (paths: string[]) =>
 			.map(([line, i]) => `${relative(".", f)}:${i + 1}: ${line}`),
 	);
 
-test("T1: 스킬·평가자·AGENTS.md·CONTRIBUTING.md 본문에 한글이 없다", () => {
+test("T1: no Hangul in the skills, evaluator, AGENTS.md and CONTRIBUTING.md", () => {
 	const hits = hangul(["skills", "agents", "AGENTS.md", "CONTRIBUTING.md"]);
-	assert.deepEqual(hits.slice(0, 5), [], `${hits.length}줄`);
+	assert.deepEqual(hits.slice(0, 5), [], `${hits.length} lines`);
 });
 
-test("T2: docs/ 본문에 한글이 없다 (예외 없음. 옛 경로 포인터도 영어)", () => {
+test("T2: no Hangul in docs/ (no exceptions; the old path pointer is English too)", () => {
 	const hits = hangul(["docs"]);
-	assert.deepEqual(hits.slice(0, 5), [], `${hits.length}줄`);
+	assert.deepEqual(hits.slice(0, 5), [], `${hits.length} lines`);
 });
 
-test("AGENTS.md 기록 형식: 표시어는 그대로, 기록 본문은 팀이 쓰는 언어", () => {
+test("AGENTS.md record format: markers unchanged, record body in the language your team uses", () => {
 	const md = read("AGENTS.md");
 	for (const m of [
 		"needs-decision",
@@ -48,7 +48,7 @@ test("AGENTS.md 기록 형식: 표시어는 그대로, 기록 본문은 팀이 �
 	assert.match(md, /the language your team uses/i);
 });
 
-test("옛 스킬 이름(/plan-talk, /to-tickets, /implement, /tdd)이 없다. 출처 줄의 원문 경로는 예외", () => {
+test("no old skill names (/plan-talk, /to-tickets, /implement, /tdd). Original paths on source lines are an exception", () => {
 	const hits = ["src", "skills", "agents", "AGENTS.md", "CONTRIBUTING.md"]
 		.flatMap(walk)
 		.flatMap((f) =>

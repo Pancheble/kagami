@@ -1,10 +1,10 @@
-// T12 명세 점검: 기획 대화(/kagami:plan)가 끝날 때 뿌리 이슈에 뿌리 형식의 칸이 다 있는지 센다.
-// 세기만 한다: 칸을 채우거나 내용이 맞는지 보지 않는다(내용은 큰 가지 확인에서 사람이 본다). 빠지면 기획 대화로 돌아간다.
-// 칸은 .github/ISSUE_TEMPLATE/root.md의 ## 제목(ITEMS_EN). 옛 한국어 칸(ITEMS)도 읽는다(#93 병렬 변경 1단계).
-// "None"(옛 "없음")은 사람이 정한 답으로 센다. Risk paths만은 정본이 CLAUDE.md의 Risk paths라 "See CLAUDE.md"여야 한다
-// ("CLAUDE.md"가 있는지만 본다). Success criteria는 목록 한 줄마다 "(check: <방법>)"(옛 "확인:")이 있어야 한다
-// (큰 가지 확인에서 평가자가 돌려볼 수 있게)
-// 실행: node src/spec.ts --repo <대상 저장소> --root <뿌리> (사람 gh 계정으로 돈다). 빠진 게 있으면 종료 코드 1
+// T12 spec check: when a planning conversation (/kagami:plan) ends, counts whether the root issue has every field of the root format.
+// Counts only: it does not fill fields or check their content (the human checks content when trying a branch). If any are missing, go back to the planning conversation.
+// The fields are the ## headings of .github/ISSUE_TEMPLATE/root.md (ITEMS_EN). It also reads the old Korean fields (ITEMS) (#93 parallel change step 1).
+// "None" (or its old Korean form) counts as an answer the human decided. Only Risk paths must be "See CLAUDE.md", since its source is Risk paths in CLAUDE.md
+// (it only checks that "CLAUDE.md" is there). Every list line of Success criteria needs "(check: <how>)" (or the old Korean form)
+// (so the evaluator can run it when trying a branch)
+// Run: node src/spec.ts --repo <target repo> --root <root> (runs as the human's gh account). Exit code 1 if anything is missing
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
 
@@ -16,7 +16,7 @@ export const ITEMS_EN = [
 	"Stack and ADRs",
 	"Out of scope",
 ];
-// 옛 한국어 칸. ITEMS_EN과 같은 순서. 옛 칸 읽기를 지우는 병렬 변경 3단계에서 지운다
+// Old Korean fields. Same order as ITEMS_EN. Deleted in parallel change step 3, which removes reading the old fields
 export const ITEMS = [
 	"기획 문서",
 	"성공 기준",
@@ -26,7 +26,7 @@ export const ITEMS = [
 	"안 할 것",
 ];
 
-// ## 제목마다 내용(HTML 주석은 뺀다)
+// Content per ## heading (HTML comments removed)
 function sections(body: string): Map<string, string> {
 	const out = new Map<string, string>();
 	for (const part of body
@@ -34,13 +34,13 @@ function sections(body: string): Map<string, string> {
 		.split(/^## /m)
 		.slice(1)) {
 		const [head, ...rest] = part.split("\n");
-		out.set(head.trim(), rest.join("\n").trimEnd()); // 앞 들여쓰기는 남긴다: 하위 목록은 기준이 아니다
+		out.set(head.trim(), rest.join("\n").trimEnd()); // keep leading indentation: sub-lists are not criteria
 	}
 	return out;
 }
 
-// 빠진 항목마다 한 줄. 비면 다 있다. 칸마다 영어 칸을 먼저, 없으면 옛 한국어 칸을 읽는다.
-// 알리는 칸 이름과 힌트는 늘 영어다(#107)
+// One line per missing item. Empty means all there. For each field, read the English one first, else the old Korean one.
+// Reported field names and hints are always English (#107)
 export function check(body: string): string[] {
 	const s = sections(body);
 	const get = (i: number) => s.get(ITEMS_EN[i]) ?? s.get(ITEMS[i]);

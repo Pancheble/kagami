@@ -1,5 +1,5 @@
-// #86 잎 X의 약속: "전부 수락" 실험은 제품에 없다. 실험 계획은 뿌리 #49 "정한 것 7"에만 있고, 실험할 때 기록은 손으로 단다
-// 제품 = 플러그인이 싣거나 init이 대상 저장소에 까는 본문
+// #86 leaf X's contract: the accept-all experiment is not in the product. The experiment plan lives only in root #49 "decision 7", and records during the experiment are left by hand
+// product = text the plugin ships or init installs in the target repo
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +14,7 @@ const walk = (p: string): string[] =>
 		: [p];
 const GONE = /not-what-i-wanted|accept-all|전부 수락/i;
 
-test("제품 본문에 not-what-i-wanted·accept-all·전부 수락이 없다", () => {
+test("product text has no not-what-i-wanted or accept-all (English or Korean)", () => {
 	const files: [string, string][] = [
 		...["AGENTS.md", "CONTRIBUTING.md", "skills", "agents"]
 			.flatMap(walk)

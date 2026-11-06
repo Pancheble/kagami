@@ -1,6 +1,6 @@
-// #51 잎 5: /kagami:init이 빈 새 저장소에 깔 것. plan은 무엇을 깔지 계산만 하고, install이 쓰기와 gh·git 호출을 한다
-// root는 kagami 플러그인 루트(${CLAUDE_PLUGIN_ROOT}). AGENTS.md·CONTRIBUTING.md·이슈 템플릿·ci/guard.yml은 거기서 읽는다
-// 계약: contracts/51/init.contract.ts
+// #51 leaf 5: what /kagami:init installs in an empty new repo. plan only works out what to install; install does the writing and the gh and git calls
+// root is the kagami plugin root (${CLAUDE_PLUGIN_ROOT}). AGENTS.md, CONTRIBUTING.md, the issue templates and ci/guard.yml are read from there
+// Contract: contracts/51/init.contract.ts
 import {
 	existsSync,
 	mkdirSync,
@@ -16,9 +16,9 @@ import { ensureLabels } from "./tree.ts";
 import { stamp, version } from "./version.ts";
 
 export type Plan = {
-	files: Record<string, string>; // 대상 저장소 경로 → 내용
-	labels: string[]; // 만들 라벨 이름(tree.ts LABELS와 같은 9개. init.test.ts가 맞춰 본다)
-	branch: string; // 만들 브랜치(dev 하나)
+	files: Record<string, string>; // target repo path → content
+	labels: string[]; // label names to create (the same 9 as tree.ts LABELS; init.test.ts checks they match)
+	branch: string; // the git branch to create (dev only)
 };
 
 const KAGAMI = "Pancheble/kagami";
@@ -36,7 +36,7 @@ const LABELS = [
 	"spec-gap",
 	"discovered",
 ];
-// 위험 경로 기본값(뿌리 #49 정한 것 6). 프로젝트별 경로는 /kagami:plan에서 더한다. Risk paths 절 안에는 경로 말고 백틱을 쓰지 않는다
+// Default risk paths (root #49 decision 6). Project-specific paths are added in /kagami:plan. Inside the Risk paths section, use backticks only for paths
 const CLAUDE_MD = `@AGENTS.md
 
 # Project
@@ -57,7 +57,7 @@ List the check commands (typecheck, lint, test, and the one that runs them all),
 - This list itself (the guard reads only paths written in backticks. Add project paths in /kagami:plan)
 `;
 
-// repo: kagami 저장소(owner/name). ref: 대상 저장소가 고정할 kagami ref. 없으면 `v<plugin.json version>`
+// repo: the kagami repo (owner/name). ref: the kagami ref the target repo pins. Defaults to `v<plugin.json version>`
 export function plan(
 	root: string,
 	{ repo, ref = `v${version(root)}` }: { repo: string; ref?: string },
@@ -69,7 +69,7 @@ export function plan(
 		},
 		enabledPlugins: { "kagami@kagami": true },
 	};
-	// ci/guard.yml의 kagami checkout 단계(repository 다음 줄이 ref)만 바꾼다
+	// change only the kagami checkout step of ci/guard.yml (the ref line follows the repository line)
 	const guard = read("ci/guard.yml").replace(
 		/repository: \S+\n(\s+)ref: \S+/,
 		`repository: ${repo}\n$1ref: ${ref}`,
@@ -88,8 +88,8 @@ export function plan(
 	};
 }
 
-// dir의 빈 새 저장소(.git 말고 아무것도 없고 커밋 없음)에 깐다. 아니면 아무것도 하지 않고 거부한다
-// 라벨, 파일 쓰기, HEAD를 dev로 두고 첫 커밋까지. push와 저장소 비밀은 사람이 한다(skills/init/SKILL.md). 대상 저장소 이름을 낸다
+// Installs into the empty new repo in dir (nothing but .git, no commits). Otherwise does nothing and refuses
+// Labels, writing files, pointing HEAD at dev, up to the first commit. The human does the push and the repo secret (skills/init/SKILL.md). Returns the target repo name
 export async function install(
 	dir: string,
 	{ root, ref }: { root: string; ref?: string },
@@ -122,7 +122,7 @@ export async function install(
 			dir,
 		)
 	).trim();
-	// 라벨을 먼저: 권한이 없어 실패해도 폴더는 빈 채로 남아 다시 돌릴 수 있다(--force라 두 번 만들어도 된다)
+	// labels first: if it fails for lack of permission, the folder stays empty and it can run again (--force, so creating them twice is fine)
 	await ensureLabels(target, run);
 	const p = plan(root, { repo: KAGAMI, ref });
 	for (const [f, body] of Object.entries(p.files)) {
@@ -135,7 +135,7 @@ export async function install(
 	return target;
 }
 
-// node src/init.ts [--ref <ref>] [--dir <대상 저장소>]  (dir 기본은 지금 폴더)
+// node src/init.ts [--ref <ref>] [--dir <target repo>]  (dir defaults to the current folder)
 if (import.meta.main) {
 	const { values } = parseArgs({
 		options: { ref: { type: "string" }, dir: { type: "string" } },

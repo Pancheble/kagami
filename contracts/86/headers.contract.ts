@@ -1,4 +1,4 @@
-// #86 잎 H의 약속: 이슈 칸 이름과 init이 까는 CLAUDE.md가 영어다(용어표 contracts/86/glossary.md). 옛 한국어 칸도 계속 읽는다(병렬 변경 1단계)
+// #86 leaf H's contract: issue field names and the CLAUDE.md init installs are English (glossary contracts/86/glossary.md). The old Korean fields are still read (parallel change step 1)
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -65,17 +65,17 @@ CLAUDE.md 참고
 없음
 `;
 
-test("check: 영어 뿌리 칸과 옛 한국어 뿌리 칸을 둘 다 센다", () => {
+test("check: counts both English root fields and old Korean root fields", () => {
 	assert.deepEqual(check(EN_ROOT), []);
 	assert.deepEqual(check(KO_ROOT), []);
 });
 
-test("check: 영어 성공 기준에 check:가 없으면 잡는다", () => {
+test("check: catches English Success criteria without check:", () => {
 	const bad = EN_ROOT.replace("(check: run it)", "");
 	assert.equal(check(bad).length, 1);
 });
 
-test("scope: ## Scope와 옛 ## 범위를 둘 다 읽는다", () => {
+test("scope: reads both ## Scope and the old Korean Scope heading", () => {
 	assert.deepEqual(
 		scope("## Goal\n\nx\n\n## Scope\n\n- `src/a.ts`\n- src/b/\n"),
 		["src/a.ts", "src/b/"],
@@ -83,7 +83,7 @@ test("scope: ## Scope와 옛 ## 범위를 둘 다 읽는다", () => {
 	assert.deepEqual(scope("## 범위\n\n- `src/a.ts`\n"), ["src/a.ts"]);
 });
 
-test("roots: 영어 칸 뿌리와 옛 한국어 칸 뿌리를 둘 다 찾는다", async () => {
+test("roots: finds roots with English fields and roots with old Korean fields", async () => {
 	const list = [
 		{ number: 3, body: "## Goal\n\nnot a root\n" },
 		{ number: 2, body: "## 기획 문서\n\ndocs/a.md\n" },
@@ -95,10 +95,10 @@ test("roots: 영어 칸 뿌리와 옛 한국어 칸 뿌리를 둘 다 찾는다"
 	);
 });
 
-test("이슈 템플릿 넷에 한글이 없고, 뿌리 템플릿 칸을 채우면 check를 통과한다", () => {
+test("the four issue templates have no Hangul, and a filled root template passes check", () => {
 	for (const t of TEMPLATES) {
 		const md = read(`.github/ISSUE_TEMPLATE/${t}.md`);
-		assert.ok(!HANGUL.test(md), `${t}.md에 한글`);
+		assert.ok(!HANGUL.test(md), `Hangul in ${t}.md`);
 	}
 	const filled = heads(read(".github/ISSUE_TEMPLATE/root.md"))
 		.map((h) =>
@@ -113,7 +113,7 @@ test("이슈 템플릿 넷에 한글이 없고, 뿌리 템플릿 칸을 채우�
 	assert.deepEqual(check(filled), []);
 });
 
-test("잎 템플릿 칸은 Goal, Contracts to keep, Done when, Scope, Waits on", () => {
+test("leaf template fields are Goal, Contracts to keep, Done when, Scope, Waits on", () => {
 	assert.deepEqual(heads(read(".github/ISSUE_TEMPLATE/leaf.md")), [
 		"Goal",
 		"Contracts to keep",
@@ -123,7 +123,7 @@ test("잎 템플릿 칸은 Goal, Contracts to keep, Done when, Scope, Waits on",
 	]);
 });
 
-test("init이 까는 CLAUDE.md에 한글이 없다", () => {
+test("the CLAUDE.md init installs has no Hangul", () => {
 	const md = plan(ROOT, { repo: "Pancheble/kagami" }).files["CLAUDE.md"];
 	assert.ok(!HANGUL.test(md), md);
 });

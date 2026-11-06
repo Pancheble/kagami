@@ -24,10 +24,10 @@ const node = (number: number, o: Partial<Tree> = {}): Tree => ({
 });
 const me = { assignees: ["someone"] };
 
-// 2: 5일 전 할당, 그 뒤 활동 없음 → stale
-// 3: 이슈 댓글 1일 전 / 4: 잎 브랜치 커밋 1일 전 / 5: 잎 PR 갱신 1일 전 → stale 아님
-// 6: 준비된 잎, 예전 잎 브랜치가 남음 / 7: 답 대기
-// 8: 이벤트가 100개를 넘는다. 첫 페이지엔 5일 전 할당만, 둘째 페이지에 1시간 전 할당 → stale 아님
+// 2: assigned 5 days ago, no activity since → stale
+// 3: issue comment 1 day ago / 4: leaf branch commit 1 day ago / 5: leaf PR updated 1 day ago → not stale
+// 6: ready leaf with an old leaf branch left / 7: waiting for an answer
+// 8: over 100 events. The first page has only the assignment 5 days ago, the second page an assignment 1 hour ago → not stale
 const tree = node(1, {
 	kind: "node",
 	labels: [],
@@ -39,7 +39,7 @@ const tree = node(1, {
 				{
 					id: 1,
 					author: "someone",
-					body: "하는 중",
+					body: "working on it",
 					createdAt: ago(24),
 					updatedAt: ago(24),
 				},
@@ -55,11 +55,11 @@ const tree = node(1, {
 
 const assigned = [
 	{ event: "assigned", created_at: ago(120) },
-	{ event: "labeled", created_at: ago(1) }, // 라벨은 활동이 아니다
+	{ event: "labeled", created_at: ago(1) }, // a label is not activity
 ];
 const R = "repos/o/r";
 const events = (n: number) => `${R}/issues/${n}/events?per_page=100`;
-// 이벤트는 페이지 목록. gh처럼 --paginate --slurp면 [페이지...], 아니면 첫 페이지만
+// events is a list of pages. With --paginate --slurp, like gh, [pages...]; otherwise the first page only
 const pages: Record<string, unknown[][]> = {
 	...Object.fromEntries([2, 3, 4, 5].map((n) => [events(n), [assigned]])),
 	[events(8)]: [
@@ -80,7 +80,7 @@ function fake(agentsMd: () => string, dev = true) {
 		[`${R}/commits/s4`]: { commit: { committer: { date: ago(24) } } },
 		[`${R}/pulls?state=all&sort=updated&direction=desc&per_page=100`]: [
 			{ head: { ref: "leaf/5-z" }, updated_at: ago(24) },
-			{ head: { ref: "leaf/22-x" }, updated_at: ago(1) }, // 2가 아니다
+			{ head: { ref: "leaf/22-x" }, updated_at: ago(1) }, // not 2
 		],
 	};
 	const run: Run = async (cmd, args) => {
@@ -96,13 +96,13 @@ function fake(agentsMd: () => string, dev = true) {
 			const all = args.includes("--paginate") && args.includes("--slurp");
 			return JSON.stringify(all ? pages[path] : pages[path][0]);
 		}
-		if (!(path in routes)) throw new Error(`모르는 호출 ${path}`);
+		if (!(path in routes)) throw new Error(`unknown call ${path}`);
 		return JSON.stringify(routes[path]);
 	};
 	return { calls, run };
 }
 
-test("collect: 준비된 일, 무활동 할당, 답 대기, 버전 차이, 남은 브랜치를 모은다", async () => {
+test("collect: gathers ready work, inactive assignments, waiting answers, version drift and leftover branches", async () => {
 	const { calls, run } = fake(
 		() => "<!-- kagami v0.0.1 -->\r\n# AGENTS.md\r\n",
 	);
@@ -117,14 +117,14 @@ test("collect: 준비된 일, 무활동 할당, 답 대기, 버전 차이, 남�
 		drift: { repo: "0.0.1", plugin: "0.1.0" },
 		leftover: { 6: ["leaf/6-old"] },
 	});
-	// 세기만 한다: 모두 gh api 읽기
+	// counts only: every call is a gh api read
 	for (const c of calls) {
 		assert.deepEqual(c.slice(0, 2), ["gh", "api"]);
 		assert.ok(!c.includes("-X") && !c.includes("-f"), c.join(" "));
 	}
 });
 
-test("collect: AGENTS.md가 없으면 버전 줄 없음으로, 다른 실패는 그대로 던진다", async () => {
+test("collect: a missing AGENTS.md means no version line; other failures are thrown as is", async () => {
 	const missing = fake(() => {
 		throw new Error("gh api failed\ngh: Not Found (HTTP 404)");
 	});
@@ -136,7 +136,7 @@ test("collect: AGENTS.md가 없으면 버전 줄 없음으로, 다른 실패는 
 	await assert.rejects(collect("o/r", tree, down.run, "0.1.0", NOW));
 });
 
-test("collect: AGENTS.md도 dev 브랜치도 없으면 버전 줄 없음이 아니라 dev 없음", async () => {
+test("collect: with neither AGENTS.md nor the dev branch, it is no dev rather than no version line", async () => {
 	const missing = () => {
 		throw new Error("gh api failed\ngh: Not Found (HTTP 404)");
 	};
@@ -150,13 +150,13 @@ test("collect: AGENTS.md도 dev 브랜치도 없으면 버전 줄 없음이 아�
 	assert.deepEqual(got.drift, { plugin: "0.1.0", dev: false });
 });
 
-test("roots: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸이 하나라도 있는 것만", async () => {
+test("roots: only open issues with no parent and not a leaf that have at least one root template field", async () => {
 	const calls: string[][] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args]);
 		return JSON.stringify([
-			{ number: 77, body: "#71 평가자가 찾은 것\n\n## 목표\n\n고친다" }, // 부모 없는 discovered
-			{ number: 90, body: "## 기획 문서\r\n\r\ndocs/x.md\r\n" }, // 칸이 빠진 뿌리(plan)
+			{ number: 77, body: "#71 평가자가 찾은 것\n\n## 목표\n\n고친다" }, // discovered issue with no parent
+			{ number: 90, body: "## 기획 문서\r\n\r\ndocs/x.md\r\n" }, // root with missing fields (plan)
 			{ number: 49, body: "## 기획 문서\n\n## 성공 기준\n\n## 안 할 것\n없음" },
 			{ number: 12, body: "" },
 		]);
@@ -168,6 +168,6 @@ test("roots: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸이
 	assert.ok(args.includes("no:parent-issue -label:leaf"), args.join(" "));
 });
 
-test("drift: 한 줄짜리 AGENTS.md도 읽는다", () => {
+test("drift: reads a one-line AGENTS.md too", () => {
 	assert.equal(drift("<!-- kagami v1.0.0 -->", "1.0.0"), undefined);
 });

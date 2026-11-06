@@ -1,4 +1,4 @@
-// #86 잎 #84의 약속: npm run check가 contracts/**의 계약·인수 테스트까지 돈다
+// #86 leaf #84's contract: npm run check also runs the contract and acceptance tests in contracts/**
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,7 +10,7 @@ const scripts: Record<string, string> = JSON.parse(
 	readFileSync(join(ROOT, "package.json"), "utf8"),
 ).scripts;
 
-// check에서 npm run <x> / npm test로 닿는 스크립트 본문 전부
+// every script body reached from check through npm run <x> / npm test
 function reach(name: string, seen = new Set<string>()): string[] {
 	if (seen.has(name) || !scripts[name]) return [];
 	seen.add(name);
@@ -21,9 +21,9 @@ function reach(name: string, seen = new Set<string>()): string[] {
 	return [body, ...next.flatMap((n) => reach(n, seen))];
 }
 
-test("check에서 닿는 스크립트가 contracts/의 테스트를 돌린다", () => {
+test("a script reached from check runs the tests in contracts/", () => {
 	const bodies = reach("check");
-	assert.ok(bodies.length, "check 스크립트가 없다");
+	assert.ok(bodies.length, "no check script");
 	assert.ok(
 		bodies.some((b) => /node --test\b.*contracts\//.test(b)),
 		bodies.join(" | "),

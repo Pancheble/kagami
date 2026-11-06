@@ -1,6 +1,6 @@
-// #51 잎 1: 플러그인 구성 읽기. 저장소 루트가 곧 플러그인이다(marketplace.json의 source "./").
-// .claude-plugin/plugin.json·marketplace.json, skills/<이름>/SKILL.md의 frontmatter, agents/<이름>.md를 읽는다
-// 계약: contracts/51/plugin.contract.ts, 인수: contracts/51/plugin.accept.ts
+// #51 leaf 1: reads the plugin setup. The repo root is the plugin (source "./" in marketplace.json).
+// Reads .claude-plugin/plugin.json and marketplace.json, the frontmatter of skills/<name>/SKILL.md, and agents/<name>.md
+// Contract: contracts/51/plugin.contract.ts, acceptance: contracts/51/plugin.accept.ts
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -8,25 +8,25 @@ export type Skill = {
 	name: string; // frontmatter name. /kagami:<name>
 	description: string;
 	license: string;
-	model: boolean; // 모델이 부를 수 있나: disable-model-invocation: true가 없으면 true
-	keys: string[]; // frontmatter에 적힌 키 전부
+	model: boolean; // can the model call it: true unless disable-model-invocation: true is set
+	keys: string[]; // every key written in the frontmatter
 };
 export type Agent = {
 	name: string; // frontmatter name. kagami:<name>
 	description: string;
-	body: string; // frontmatter 아래 본문
+	body: string; // the body below the frontmatter
 };
 export type Components = {
 	plugin: string; // plugin.json name
 	version: string; // plugin.json version
 	marketplace: string; // marketplace.json name
-	source: string; // marketplace.json의 이 플러그인 항목 source
+	source: string; // source of this plugin's entry in marketplace.json
 	skills: Skill[];
 	agents: Agent[];
 };
 
 const read = (root: string, f: string) => readFileSync(join(root, f), "utf8");
-// --- 사이의 `키: 값` 줄. 값의 앞뒤 따옴표는 뗀다. 여러 줄 값은 쓰지 않는다
+// `key: value` lines between ---. Quotes around a value are stripped. Multi-line values are not used
 function frontmatter(md: string): { fm: Record<string, string>; body: string } {
 	const m = md.match(/^---\n([\s\S]*?)\n---\n?/);
 	const fm: Record<string, string> = {};

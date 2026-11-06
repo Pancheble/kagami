@@ -29,11 +29,11 @@ TypeScript. 이유: 팀이 쓴다. 버린 대안: Python
 없음
 `;
 
-test("다 채운 뿌리는 빠진 게 없다", () => {
+test("a fully filled root has nothing missing", () => {
 	assert.deepEqual(check(FULL), []);
 });
 
-test("빈 뿌리 템플릿은 항목마다 빠졌다고 알린다", () => {
+test("an empty root template reports every item as missing", () => {
 	const template = readFileSync(
 		new URL("../.github/ISSUE_TEMPLATE/root.md", import.meta.url),
 		"utf8",
@@ -44,7 +44,7 @@ test("빈 뿌리 템플릿은 항목마다 빠졌다고 알린다", () => {
 	);
 });
 
-test("칸이 없거나 주석만 있으면 빠졌다", () => {
+test("a field that is absent or holds only a comment is missing", () => {
 	const body = FULL.replace("## 안 할 것\n\n없음\n", "").replace(
 		"시드 계정 test@example.com",
 		"<!-- 테스트 계정, 시드 데이터 -->",
@@ -55,51 +55,48 @@ test("칸이 없거나 주석만 있으면 빠졌다", () => {
 	]);
 });
 
-test("없음은 사람이 정한 답으로 센다", () => {
+test("None counts as an answer the human decided", () => {
 	assert.deepEqual(
 		check(FULL.replace("시드 계정 test@example.com", "없음")),
 		[],
 	);
 });
 
-test("위험 경로: CLAUDE.md 참고는 통과한다", () => {
+test("Risk paths: See CLAUDE.md passes", () => {
 	assert.ok(FULL.includes("## 위험 경로\n\nCLAUDE.md 참고\n"));
 	assert.deepEqual(check(FULL), []);
 });
 
-test("위험 경로에 경로 목록이나 없음을 적으면 CLAUDE.md로 보낸다", () => {
+test("a path list or None under Risk paths points to CLAUDE.md", () => {
 	for (const text of ["`src/auth/`", "없음"])
 		assert.deepEqual(check(FULL.replace("CLAUDE.md 참고", text)), [
 			'Risk paths: the source of truth is Risk paths in CLAUDE.md. Write only "See CLAUDE.md" here',
 		]);
 });
 
-test("확인 방법이 없는 성공 기준을 하나씩 알린다", () => {
+test("reports each success criterion with no check method", () => {
 	const body = FULL.replace(
 		" (확인: 시드 계정에 틀린 비밀번호로 로그인)",
 		"",
-	).replace("- 가입한", "  - 덧붙인 설명은 기준이 아니다\n- 가입한");
+	).replace("- 가입한", "  - an added note is not a criterion\n- 가입한");
 	assert.deepEqual(check(body), [
 		'Success criteria 2 "틀린 비밀번호면 에러가 뜬다": no check method',
 	]);
 });
 
-test("성공 기준에 목록이 없으면 빠졌다", () => {
-	const body = FULL.replace(
-		/- 가입한[^\n]*\n- 틀린[^\n]*\n/,
-		"로그인이 잘 된다\n",
-	);
+test("Success criteria with no list is missing", () => {
+	const body = FULL.replace(/- 가입한[^\n]*\n- 틀린[^\n]*\n/, "login works\n");
 	assert.deepEqual(check(body), [
 		"Success criteria: no list (- <criterion> (check: <how>))",
 	]);
 });
 
-test("뿌리 이슈 본문은 하네스 계정으로 읽는다", async () => {
+test("reads the root issue body with the harness account", async () => {
 	const calls: string[] = [];
 	const body = await readRoot("o/app", 7, async (cmd, args) => {
 		calls.push([cmd, ...args].join(" "));
-		return "본문\n";
+		return "body\n";
 	});
-	assert.equal(body, "본문");
+	assert.equal(body, "body");
 	assert.deepEqual(calls, ["gh issue view 7 -R o/app --json body --jq .body"]);
 });

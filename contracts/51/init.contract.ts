@@ -1,4 +1,4 @@
-// #51 잎 5 (init)의 약속: 빈 새 저장소에 깔 파일·라벨·브랜치. kagami 파일은 플러그인 루트에서 그대로 복사, AGENTS.md만 버전 줄을 단다
+// #51 leaf 5 (init) contract: files, labels and git branch to install in an empty new repo. kagami files are copied as is from the plugin root; only AGENTS.md gets a version line
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +15,7 @@ const TEMPLATES = ["root", "branch", "node", "leaf"].map(
 	(t) => `.github/ISSUE_TEMPLATE/${t}.md`,
 );
 
-test("깔 파일은 이것뿐이다", () => {
+test("these are the only files installed", () => {
 	assert.deepEqual(
 		Object.keys(plan(ROOT, { repo: REPO }).files).sort(),
 		[
@@ -29,14 +29,14 @@ test("깔 파일은 이것뿐이다", () => {
 	);
 });
 
-test("AGENTS.md는 버전 줄을 단 복사본, CONTRIBUTING.md와 이슈 템플릿은 그대로", () => {
+test("AGENTS.md is a copy with a version line; CONTRIBUTING.md and the issue templates are copied as is", () => {
 	const { files } = plan(ROOT, { repo: REPO });
 	assert.equal(files["AGENTS.md"], stamp(read("AGENTS.md"), version(ROOT)));
 	for (const f of ["CONTRIBUTING.md", ...TEMPLATES])
 		assert.equal(files[f], read(f), f);
 });
 
-test("CLAUDE.md: @AGENTS.md, Risk paths 기본값 다섯, 세션을 열면 /kagami:next", () => {
+test("CLAUDE.md: @AGENTS.md, five default Risk paths, /kagami:next when a session opens", () => {
 	const md = plan(ROOT, { repo: REPO }).files["CLAUDE.md"];
 	assert.ok(md.includes("@AGENTS.md"));
 	assert.deepEqual(riskPaths(md), [
@@ -49,7 +49,7 @@ test("CLAUDE.md: @AGENTS.md, Risk paths 기본값 다섯, 세션을 열면 /kaga
 	assert.ok(md.includes("/kagami:next"));
 });
 
-test("settings.json: 마켓플레이스 kagami를 ref로 고정하고 플러그인을 켠다. ref 기본은 v<version>", () => {
+test("settings.json: pins the kagami marketplace to a ref and enables the plugin. ref defaults to v<version>", () => {
 	const settings = (ref?: string) =>
 		JSON.parse(plan(ROOT, { repo: REPO, ref }).files[".claude/settings.json"]);
 	const source = (ref: string) => ({ source: "github", repo: REPO, ref });
@@ -65,7 +65,7 @@ test("settings.json: 마켓플레이스 kagami를 ref로 고정하고 플러그�
 	);
 });
 
-test("가드 워크플로는 kagami를 같은 ref로 받는다", () => {
+test("the guard workflow checks out kagami at the same ref", () => {
 	const yml = (ref?: string) =>
 		plan(ROOT, { repo: REPO, ref }).files[".github/workflows/kagami-guard.yml"];
 	assert.ok(yml().includes(`repository: ${REPO}`));
@@ -74,7 +74,7 @@ test("가드 워크플로는 kagami를 같은 ref로 받는다", () => {
 	assert.ok(yml("dev").includes("ref: dev"));
 });
 
-test("라벨 9개(기록 7 + node, leaf)와 dev 브랜치 하나", () => {
+test("9 labels (7 records + node, leaf) and one dev branch", () => {
 	const p = plan(ROOT, { repo: REPO });
 	assert.deepEqual(
 		[...p.labels].sort(),

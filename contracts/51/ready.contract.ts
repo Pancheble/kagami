@@ -1,10 +1,10 @@
-// #51 잎 2 (next: 준비된 일)의 약속: ready(뿌리)가 준비된 일과 종류를 트리 순서로 낸다. 칸이 다 있고 자식이 없는 뿌리도 split(큰 가지로 쪼개기)
+// #51 leaf 2 (next: ready work) contract: ready(root) returns ready work and its kind in tree order. A root with every field and no children is a split too (split into branches)
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Issue, ready } from "../../src/next.ts";
 import { ITEMS } from "../../src/spec.ts";
 
-// 명세 점검을 통과하는 뿌리 본문
+// a root body that passes the spec check
 const FULL = ITEMS.map(
 	(i) =>
 		`## ${i}\n\n${i === "위험 경로" ? "CLAUDE.md 참고" : i === "성공 기준" ? "- 된다 (확인: 본다)" : "없음"}`,
@@ -25,7 +25,7 @@ const issue = (number: number, o: Partial<Issue> = {}): Issue => ({
 const leaf = (number: number, o: Partial<Issue> = {}) =>
 	issue(number, { kind: "leaf", labels: ["leaf"], ...o });
 
-test("잎 구현·노드 쪼개기·큰 가지 확인을 트리 순서로 내고, 할당·막힘·기다림은 뺀다", () => {
+test("returns leaf builds, node splits and branch tries in tree order, leaving out assigned, blocked and waiting ones", () => {
 	const root = issue(1, {
 		body: FULL,
 		children: [
@@ -64,7 +64,7 @@ test("잎 구현·노드 쪼개기·큰 가지 확인을 트리 순서로 내고
 	]);
 });
 
-test("큰 가지 아래 잎이 하나라도 열려 있으면 확인이 아니다", () => {
+test("a branch with any open leaf is not a try", () => {
 	const root = issue(1, {
 		body: FULL,
 		children: [
@@ -79,7 +79,7 @@ test("큰 가지 아래 잎이 하나라도 열려 있으면 확인이 아니다
 	assert.deepEqual(ready(root), []);
 });
 
-test("칸이 빠진 뿌리는 기획 대화다. 할당된 뿌리는 뺀다", () => {
+test("a root with missing fields is a planning conversation. Assigned roots are left out", () => {
 	assert.deepEqual(ready(issue(1)), [{ number: 1, kind: "plan" }]);
 	assert.deepEqual(ready(issue(1, { assignees: ["someone"] })), []);
 	assert.deepEqual(ready(issue(1, { body: FULL, children: [issue(2)] })), [
@@ -87,7 +87,7 @@ test("칸이 빠진 뿌리는 기획 대화다. 할당된 뿌리는 뺀다", () 
 	]);
 });
 
-test("칸이 다 있고 자식이 없는 뿌리는 큰 가지로 쪼갠다(split). 할당된 뿌리는 뺀다", () => {
+test("a root with every field and no children is split into branches (split). Assigned roots are left out", () => {
 	assert.deepEqual(ready(issue(1, { body: FULL })), [
 		{ number: 1, kind: "split" },
 	]);

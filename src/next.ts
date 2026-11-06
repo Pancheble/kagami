@@ -1,6 +1,6 @@
-// #51 잎 2·3: /kagami:next가 세션을 열 때 보는 것. 고르기와 추천은 CC가 한다. 여기서는 세기만 한다
-// 잎 2: ready(준비된 일과 종류). 잎 3: stale, waiting, drift, leftover와 CLI
-// 계약: contracts/51/ready.contract.ts, contracts/51/next.contract.ts
+// #51 leaves 2 and 3: what /kagami:next looks at when a session opens. CC picks and recommends. This only counts
+// Leaf 2: ready (ready work and its kind). Leaf 3: stale, waiting, drift, leftover, and the CLI
+// Contracts: contracts/51/ready.contract.ts, contracts/51/next.contract.ts
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { num, type Run, sh } from "./run.ts";
@@ -9,12 +9,12 @@ import { readTree, type Tree } from "./tree.ts";
 import { stamped, version } from "./version.ts";
 
 export type State = "open" | "closed";
-// tree.ts Tree에서 쓰는 칸만. Tree를 그대로 넘길 수 있다(tree.test.ts가 타입으로 확인)
+// Only the fields used from tree.ts Tree. A Tree can be passed as is (tree.test.ts checks this with types)
 export type Issue = {
 	number: number;
 	title: string;
 	state: State;
-	kind: "node" | "leaf"; // leaf 라벨이 있으면 leaf
+	kind: "node" | "leaf"; // leaf if it has the leaf label
 	labels: string[];
 	body: string;
 	assignees: string[];
@@ -22,12 +22,12 @@ export type Issue = {
 	children: Issue[];
 };
 
-// build: 준비된 잎 구현 / split: 자식 없는 노드 쪼개기(칸이 다 있고 자식 없는 뿌리 포함) / plan: 칸이 빠진 뿌리 기획 대화 / try: 잎이 다 닫힌 큰 가지 확인
+// build: build a ready leaf / split: split a node with no children (including a root with every field and no children) / plan: planning conversation for a root with missing fields / try: try a branch whose leaves are all closed
 export type Kind = "build" | "split" | "plan" | "try";
 export type Ready = { number: number; kind: Kind };
 
-// root는 뿌리 이슈. 큰 가지는 뿌리의 바로 아래 노드다. 트리 순서(앞순회)로 낸다.
-// 모두 공통: 열림, 할당 없음, blocked 라벨 없음, blocked-by가 다 닫힘. 닫힌 이슈 아래는 보지 않는다
+// root is the root issue. A branch is a node directly under the root. Output in tree order (pre-order).
+// Common to all: open, unassigned, no blocked label, every blocked-by closed. Nothing under a closed issue is looked at
 export function ready(root: Issue): Ready[] {
 	const out: Ready[] = [];
 	const walk = (i: Issue, depth: number) => {
@@ -55,14 +55,14 @@ export function ready(root: Issue): Ready[] {
 
 const leaves = (i: Issue): Issue[] =>
 	i.kind === "leaf" ? [i] : i.children.flatMap(leaves);
-// 잎이 하나도 없으면 확인할 것이 없다
+// With no leaves at all, there is nothing to try
 const allClosed = (l: Issue[]) =>
 	l.length > 0 && l.every((x) => x.state === "closed");
 
-// 이슈 번호 → 마지막 활동 시각(ISO). 활동 = 할당된 때, 잎 브랜치 푸시, PR(열기·커밋·댓글), 이슈 댓글 중 가장 늦은 것. CLI가 모은다
+// Issue number → last activity time (ISO). Activity = the latest of: when assigned, a leaf branch push, a PR (opened, committed to, commented on), an issue comment. The CLI gathers it
 export type Activity = Record<number, string>;
 
-// 할당된 열린 이슈 중 마지막 활동이 now보다 3일(72시간) 넘게 앞선 것. activity에 없는 이슈는 판정하지 않는다
+// Assigned open issues whose last activity is more than 3 days (72 hours) before now. Issues missing from activity are not judged
 export function stale(root: Issue, activity: Activity, now: Date): number[] {
 	return all(root)
 		.filter(
@@ -75,7 +75,7 @@ export function stale(root: Issue, activity: Activity, now: Date): number[] {
 		.map((i) => i.number);
 }
 
-// 열린 이슈 중 needs-decision 라벨이 붙은 것
+// Open issues with the needs-decision label
 export function waiting(root: Issue): number[] {
 	return all(root)
 		.filter((i) => i.state === "open" && i.labels.includes("needs-decision"))
@@ -87,17 +87,17 @@ const all = <T extends { children: T[] }>(i: T): T[] => [
 	...i.children.flatMap(all),
 ];
 
-// 대상 저장소 AGENTS.md 첫 줄의 버전(version.ts stamped)과 플러그인 버전이 다르면 둘을 낸다. 같으면 undefined
+// If the version on the first line of the target repo's AGENTS.md (version.ts stamped) differs from the plugin version, returns both. undefined if equal
 export function drift(
 	agentsMd: string,
 	plugin: string,
 ): { repo?: string; plugin: string } | undefined {
-	// stamped는 줄 끝이 \n일 때만 읽는다. CRLF와 한 줄짜리 파일도 읽게 맞춰 넘긴다
+	// stamped reads only when the line ends in \n. Normalize so CRLF and one-line files are read too
 	const repo = stamped(`${agentsMd.replace(/\r\n/g, "\n")}\n`);
 	return repo === plugin ? undefined : { repo, plugin };
 }
 
-// 이슈마다 남은 잎 브랜치(leaf/<번호>-*). branches는 브랜치 이름 목록(refs/heads/·origin/ 없이). 없는 이슈는 빼고 낸다
+// Leaf branches left per issue (leaf/<number>-*). branches is a list of git branch names (without refs/heads/ or origin/). Issues without any are left out
 export function leftover(
 	numbers: number[],
 	branches: string[],
@@ -110,8 +110,8 @@ export function leftover(
 	return out;
 }
 
-// 뿌리: 부모 없고 leaf 아닌 열린 이슈 중 뿌리 템플릿 칸(spec.ts ITEMS_EN, 옛 한국어 칸 ITEMS의 ## 제목)이 하나라도 있는 것. 번호 순.
-// 칸이 빠진 뿌리(plan)도 센다. 칸이 하나도 없는 부모 없는 이슈(discovered 등)는 뿌리가 아니다
+// Roots: open issues with no parent and not a leaf that have at least one root template field (## headings of spec.ts ITEMS_EN or the old Korean fields ITEMS). In number order.
+// Roots with missing fields (plan) count too. An issue with no parent and no fields at all (discovered and so on) is not a root
 const HEADS = [...ITEMS_EN, ...ITEMS];
 export async function roots(repo: string, run: Run): Promise<number[]> {
 	const list: { number: number; body: string }[] = JSON.parse(
@@ -143,9 +143,9 @@ export async function roots(repo: string, run: Run): Promise<number[]> {
 
 const is404 = (e: Error) => e.message.includes("HTTP 404");
 
-// CLI가 모으는 것. GitHub를 읽기만 하고 쓰지 않는다. plugin은 플러그인 버전
-// 활동은 할당된 열린 이슈만 모은다(stale이 그것만 본다). 잎 브랜치 푸시는 브랜치 머리 커밋의 커밋 시각으로 본다
-// ponytail: PR은 최근 갱신 순 100개까지. 넘으면 페이지 넘기기를 붙인다
+// What the CLI gathers. It only reads GitHub, never writes. plugin is the plugin version
+// Activity is gathered only for assigned open issues (stale looks only at those). A leaf branch push is the commit time of the git branch's head commit
+// ponytail: PRs up to the 100 most recently updated. Add paging if there are more
 export async function collect(
 	repo: string,
 	tree: Tree,
@@ -170,7 +170,7 @@ export async function collect(
 	for (const i of all(tree)) {
 		if (i.state !== "open" || !i.assignees.length) continue;
 		const mine = leftover([i.number], branches)[i.number] ?? [];
-		// 이벤트는 오래된 순이라 끝까지 읽어야 최근 할당이 보인다
+		// events come oldest first, so read to the end to see the latest assignment
 		const events: { event: string; created_at: string }[] = (
 			await api(
 				`${R}/issues/${i.number}/events?per_page=100`,
@@ -203,7 +203,7 @@ export async function collect(
 		if (is404(e)) return undefined;
 		throw e;
 	});
-	// AGENTS.md가 404면 dev 브랜치부터 없는지 본다. 없으면 버전 줄 없음이 아니라 dev 없음이다
+	// if AGENTS.md is a 404, check whether the dev branch itself is missing. If so, it is no dev rather than no version line
 	const dev =
 		md !== undefined ||
 		(await api(`${R}/branches/dev`).then(
@@ -226,8 +226,8 @@ export async function collect(
 	};
 }
 
-// node src/next.ts --repo <owner/name> --root <뿌리 번호> → {ready, stale, waiting, drift?, leftover} JSON
-// node src/next.ts --repo <owner/name> → 뿌리 번호 배열 JSON
+// node src/next.ts --repo <owner/name> --root <root number> → {ready, stale, waiting, drift?, leftover} JSON
+// node src/next.ts --repo <owner/name> → JSON array of root numbers
 if (import.meta.main) {
 	const { values } = parseArgs({
 		options: { repo: { type: "string" }, root: { type: "string" } },
