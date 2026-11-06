@@ -5,8 +5,18 @@
 // version은 plugin.json version. titles는 그 큰 가지 잎들의 PR 제목(머지 순서)
 // tag: 달 태그(`v<version>`). 1.0.0보다 낮으면 없다. notes: Release 설명, 제목마다 "- <제목>" 한 줄
 export function finish(
-	_version: string,
-	_titles: string[],
+	version: string,
+	titles: string[],
 ): { tag?: string; notes: string } {
-	throw new Error("not implemented");
+	const notes = titles.map((t) => `- ${t}`).join("\n");
+	return Number.parseInt(version, 10) >= 1
+		? { tag: `v${version}`, notes }
+		: { notes };
+}
+
+// node src/try.ts <version> [잎 PR 제목...] → {tag?, notes} JSON
+if (import.meta.main) {
+	const [version, ...titles] = process.argv.slice(2);
+	if (!version) throw new Error("쓰는 법: node src/try.ts <version> [제목...]");
+	console.log(JSON.stringify(finish(version, titles)));
 }
