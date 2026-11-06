@@ -1,6 +1,6 @@
 ---
 name: build
-description: "Implement one small issue test-first, run the checks, and open a PR."
+description: "Implement one kagami leaf issue test-first, get the evaluator's verdict, and open a PR to dev."
 license: MIT
 ---
 

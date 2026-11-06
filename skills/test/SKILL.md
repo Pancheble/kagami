@@ -1,6 +1,6 @@
 ---
 name: test
-description: "Write the test first, then the code (red → green → refactor). Use when building a feature or fixing a bug."
+description: "Test-first loop (red → green → refactor) that /kagami:build runs inside a kagami leaf issue. Not for general coding requests."
 license: MIT
 ---
 
