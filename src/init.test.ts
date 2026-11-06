@@ -16,14 +16,14 @@ import type { Run } from "./run.ts";
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const TARGET = "o/target";
 
-// 빈 새 저장소 흉내: .git 폴더 하나(extra가 있으면 그 파일도)
+// fake empty new repo: a single .git folder (plus the extra files, if any)
 function repo(extra?: string) {
 	const dir = mkdtempSync(join(tmpdir(), "init-"));
 	mkdirSync(join(dir, ".git"));
 	if (extra) writeFileSync(join(dir, extra), "x");
 	return dir;
 }
-// commits가 true면 HEAD가 있다
+// HEAD exists when commits is true
 function fake(commits = false) {
 	const calls: string[][] = [];
 	const run: Run = async (cmd, args) => {
@@ -38,7 +38,7 @@ function fake(commits = false) {
 	return { run, calls };
 }
 
-test("빈 새 저장소에 plan의 파일을 쓰고, 라벨 9개를 만들고, dev에 첫 커밋을 한다", async () => {
+test("in an empty new repo, writes the plan's files, creates 9 labels and makes the first commit on dev", async () => {
 	const dir = repo();
 	const { run, calls } = fake();
 	assert.equal(await install(dir, { root: ROOT, ref: "dev" }, run), TARGET);
@@ -58,7 +58,7 @@ test("빈 새 저장소에 plan의 파일을 쓰고, 라벨 9개를 만들고, d
 	);
 });
 
-test("커밋이 있으면 거부하고 아무것도 쓰지 않는다", async () => {
+test("refuses and writes nothing if there are commits", async () => {
 	const dir = repo();
 	const { run, calls } = fake(true);
 	await assert.rejects(
@@ -69,7 +69,7 @@ test("커밋이 있으면 거부하고 아무것도 쓰지 않는다", async () 
 	assert.ok(!calls.some((c) => c[0] === "gh"));
 });
 
-test(".git 말고 파일이 있으면 거부하고 아무것도 쓰지 않는다", async () => {
+test("refuses and writes nothing if there are files besides .git", async () => {
 	const dir = repo("README.md");
 	const { run, calls } = fake();
 	await assert.rejects(install(dir, { root: ROOT }, run), /README\.md/);
@@ -77,7 +77,7 @@ test(".git 말고 파일이 있으면 거부하고 아무것도 쓰지 않는다
 	assert.deepEqual(calls, []);
 });
 
-test("git 저장소가 아니면 거부한다", async () => {
+test("refuses if it is not a git repo", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "init-"));
 	await assert.rejects(install(dir, { root: ROOT }, fake().run), /git/);
 });

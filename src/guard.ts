@@ -1,14 +1,14 @@
-// CI 가드: PR 체크아웃의 HEAD(PR을 dev에 얹은 커밋)를 origin/dev와 비교해 판정(judge)하고 결과를 체크로 보인다.
-// dev로 가는 문은 사람의 머지 동의다(AGENTS.md). 가드는 그 앞에 빨강·초록·표시를 보인다. 이 파일은 위험 경로다(CLAUDE.md의 Risk paths).
-//   계약 테스트 수정 감지: 기존 계약·인수 테스트를 고치거나 지웠으면 막는다.
-//     계약 정리: PR에 contract-change 라벨이 있고 본문 TL;DR의 Changed 줄에 그 계약 파일(*.contract.*)이 적혀 있으면 막지 않고 표시한다
-//   래칫: dev에서 초록이던 계약·인수 테스트가 HEAD에서 빨강이거나 사라졌으면 FAIL
-//   사실 계산: 위험 경로(dev의 CLAUDE.md 목록), 지운 테스트, 새 의존성을 센다
-//   위험 경로 정본: PR 쪽 CLAUDE.md에 Risk paths 절이 없으면 막는다
-//   보안 계산 검사: 바뀐 코드를 Biome security 규칙으로 본다
-// 계약 정리·위험 경로·지운 테스트·보안 지적은 초록에 표시(경고)로 사람에게 보인다. GitHub에 쓰지 않는다(읽기 토큰)
-// 실행: node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
-//   라벨과 본문은 GITHUB_EVENT_PATH의 pull_request payload에서 읽는다. 로컬에선 같은 모양의 JSON 파일을 그 변수로 준다
+// CI guard: compares the PR checkout's HEAD (the PR on top of dev) with origin/dev, judges it (judge), and shows the result as a check.
+// The gate to dev is the human's merge consent (AGENTS.md). Before it, the guard shows red, green or a flag. This file is a risk path (Risk paths in CLAUDE.md).
+//   Edited-contract check: blocks if an existing contract or acceptance test was edited or deleted.
+//     Contract cleanup: if the PR has the contract-change label and the Changed line of the body TL;DR names that contract file (*.contract.*), flag it instead of blocking
+//   Ratchet: FAIL if a contract or acceptance test that was green on dev is red or gone at HEAD
+//   Fact counting: counts risk paths (the list in dev's CLAUDE.md), deleted tests and new dependencies
+//   Risk paths source: blocks if the PR side's CLAUDE.md has no Risk paths section
+//   Security check: looks at changed code with the Biome security rules
+// Contract cleanup, risk paths, deleted tests and security findings are shown to the human as flags (warnings) on green. Writes nothing to GitHub (read token)
+// Run: node src/guard.ts --dir <PR checkout>  (origin/dev must exist. Exit code 1 when blocked)
+//   Labels and body are read from the pull_request payload in GITHUB_EVENT_PATH. Locally, pass a JSON file of the same shape in that variable
 import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, matchesGlob, resolve } from "node:path";
@@ -24,8 +24,8 @@ const BIOME = fileURLToPath(
 
 export type Row = { name: string; ok: boolean; error: string };
 
-// git은 ASCII가 아닌 글자나 따옴표가 든 경로를 "..."로 감싸고 바이트를 \ooo로 적는다(core.quotePath).
-// 안 풀면 한글 이름의 계약 테스트가 정규식과 앞부분 일치를 빠져나간다
+// git wraps paths with non-ASCII characters or quotes in "..." and writes bytes as \ooo (core.quotePath).
+// Without unquoting, contract tests with Korean names slip past the regex and prefix match
 export function unquote(p: string): string {
 	if (!p.startsWith('"')) return p;
 	const esc: Record<string, number> = {
@@ -54,16 +54,16 @@ export function unquote(p: string): string {
 	}
 	return Buffer.from(bytes).toString("utf8");
 }
-// git이 내놓은 경로 목록 한 줄에 하나
+// Path list from git, one per line
 export const paths = (out: string) =>
 	out.split("\n").filter(Boolean).map(unquote);
-// 막힘의 이유
+// Reason for blocking
 export type Failed = { why: string };
 
-// 대상 저장소의 의존성을 worktree에 깐다. 테스트를 돌리는 곳(results)은 모두 이 길로 간다.
-// 대상 저장소의 코드를 받는 일이라 인증 없는 환경에서, 설치 스크립트(lifecycle)는 돌리지 않는다.
-// lock 파일대로만 깐다(npm ci). 못 깔면 던진다: 판정할 수 없는 걸 통과로 보지 않는다
-// ponytail: npm의 package-lock.json만. pnpm·yarn이나 lock 없는 저장소는 안 깐다(불러오기 실패로 빨강)
+// Installs the target repo's dependencies in the worktree. Every place that runs tests (results) goes through here.
+// This takes in the target repo's code, so it runs in an environment without credentials and does not run install scripts (lifecycle).
+// Installs only from the lock file (npm ci). Throws if it cannot: something that cannot be judged is not a pass
+// ponytail: npm's package-lock.json only. pnpm, yarn or repos without a lock are not installed (red from load failure)
 export async function install(wt: string, run: Run) {
 	if (!existsSync(join(wt, "package-lock.json"))) return;
 	await run(
@@ -74,9 +74,9 @@ export async function install(wt: string, run: Run) {
 	);
 }
 
-// 계약·인수 테스트 파일마다 node --test를 따로 돌려 테스트 하나하나의 결과를 읽는다. 결과는 리포터가 파일에 쓴다.
-// PR의 코드를 돌리니 인증 없는 환경에서 돌린다. 파일이 불러와지지 않으면 결과가 비어 있다.
-// 그 커밋의 lock 파일로 의존성을 먼저 깐다(PR과 dev의 lock이 다를 수 있다)
+// Runs node --test separately per contract or acceptance test file to read each test's result. The reporter writes results to a file.
+// It runs the PR's code, so it runs in an environment without credentials. If a file fails to load, its results are empty.
+// Installs dependencies from that commit's lock file first (the PR's and dev's lock can differ)
 export async function results(
 	files: string[],
 	cwd: string,
@@ -87,7 +87,7 @@ export async function results(
 	const out = new Map<string, Row[]>();
 	for (const [k, f] of files.entries()) {
 		const dest = join(tmp, `${k}.jsonl`);
-		// 빨강이면 종료 코드가 0이 아니다
+		// red means a non-zero exit code
 		await quiet(
 			run(
 				process.execPath,
@@ -114,14 +114,14 @@ export async function results(
 	return out;
 }
 
-// CLAUDE.md "Risk paths" 절에서 백틱으로 적은 경로만 읽는다. 말로 적은 줄(main을 옮기는 스크립트 등)은 계산하지 못한다
+// Reads only paths written in backticks in the CLAUDE.md "Risk paths" section. Lines written in words (a script that moves main, and so on) cannot be counted
 const section = (md: string) =>
 	md.split(/^#+ /m).find((s) => s.startsWith("Risk paths"));
 export function riskPaths(md: string): string[] {
 	const sec = section(md);
 	return sec ? [...sec.matchAll(/`([^`]+)`/g)].map((m) => m[1]) : [];
 }
-// 끝이 /면 그 폴더 아래, *가 있으면 글롭(*는 /를 넘지 않는다), 나머지는 이름이 똑같을 때
+// Ending in / means under that folder, * means a glob (* does not cross /), anything else must match the name exactly
 const under = (f: string, p: string) =>
 	p.endsWith("/")
 		? f.startsWith(p)
@@ -142,15 +142,15 @@ const deps = (pkg: string): string[] => {
 	}
 };
 export type Facts = {
-	contracts: string[]; // 고치거나 지운 기존 계약·인수 테스트
-	risk: string[]; // 건드린 위험 경로
-	deleted: string[]; // 지운 테스트
-	deps: string[]; // 새 의존성
+	contracts: string[]; // existing contract or acceptance tests edited or deleted
+	risk: string[]; // risk paths touched
+	deleted: string[]; // deleted tests
+	deps: string[]; // new dependencies
 };
-type Side = { md: string; pkg: string }; // CLAUDE.md와 package.json
+type Side = { md: string; pkg: string }; // CLAUDE.md and package.json
 
-// 사실 계산: git diff --name-status --no-renames의 출력과 양쪽 CLAUDE.md·package.json으로 센다.
-// 위험 경로 목록은 dev 쪽을 쓴다. PR이 목록에서 자기 경로를 빼도 걸리고, 목록을 바꾼 것 자체가 위험 경로다
+// Fact counting: counts from the output of git diff --name-status --no-renames and the CLAUDE.md and package.json of both sides.
+// The risk path list comes from dev. Even if a PR drops its own path from the list, it is caught, and changing the list is itself a risk path
 export function facts(status: string, base: Side, head: Side): Facts {
 	const changes = status
 		.split("\n")
@@ -179,9 +179,9 @@ export function facts(status: string, base: Side, head: Side): Facts {
 	};
 }
 
-// 래칫: dev에서 초록이던 계약·인수 테스트는 HEAD에서도 초록이어야 한다. 빨강이 됐거나 사라졌으면 깨진 것이다.
-// 아직 빨강인 건 봐준다. 통과 목록은 저장하지 않고 머지 때마다 dev에서 계산한다.
-// skip: 계약 정리로 고친 파일. 그 파일만 빼고 나머지는 지킨다
+// Ratchet: a contract or acceptance test that was green on dev must also be green at HEAD. If it turned red or is gone, it broke.
+// Tests still red are let through. The passing list is not stored; it is computed from dev on every merge.
+// skip: files edited by a contract cleanup. Everything except those files is kept
 export async function ratchet(
 	wt: string,
 	run: Run,
@@ -226,7 +226,7 @@ export async function ratchet(
 	return { broken: green.filter((k) => !ok.has(k)), kept: green.length };
 }
 
-// 보안 계산 검사: 바뀐 코드 파일을 하네스의 Biome security 규칙(eval, 비밀값 등)으로 본다. 못 돌렸으면 그것도 지적이다
+// Security check: looks at changed code files with the harness's Biome security rules (eval, secrets and so on). Failing to run is a finding too
 export async function security(
 	files: string[],
 	wt: string,
@@ -264,9 +264,9 @@ export async function security(
 const items = (xs: string[]) =>
 	xs.length ? xs.map((x) => `\n  - ${x}`).join("") : " None";
 
-// PR의 라벨과 본문(GITHUB_EVENT_PATH의 pull_request)
+// The PR's labels and body (pull_request in GITHUB_EVENT_PATH)
 export type Pr = { labels: string[]; body: string };
-// 계약 정리로 허가된 파일: contract-change 라벨이 있고, 본문의 Changed: 줄에 그 경로가 낱말로 적힌 계약 테스트. 인수 테스트는 아니다
+// Files allowed by a contract cleanup: contract tests named as a word on the body's Changed: line, with the contract-change label. Not acceptance tests
 export const allowed = (contracts: string[], pr?: Pr) => {
 	if (!pr?.labels.includes("contract-change")) return [];
 	const words = new Set(
@@ -278,7 +278,7 @@ export const allowed = (contracts: string[], pr?: Pr) => {
 	return contracts.filter((f) => /\.contract\./.test(f) && words.has(f));
 };
 
-// 판정: 막힘(fail)이면 빨강. wait면 초록에 사람이 볼 것을 표시한다. report는 로그와 잡 요약 본문
+// Judgment: blocked (fail) is red. wait means green with something flagged for the human. report is the log and job summary body
 export async function judge(wt: string, run: Run, pr?: Pr) {
 	const show = (ref: string, f: string) =>
 		run("git", ["show", `${ref}:${f}`], wt).catch(() => "");
@@ -305,11 +305,11 @@ export async function judge(wt: string, run: Run, pr?: Pr) {
 		.map((l) => unquote(l.split("\t")[1]));
 	const tidy = allowed(f.contracts, pr);
 	const bad = f.contracts.filter((c) => !tidy.includes(c));
-	// 허가 없이 계약을 고쳤으면 막힌다. 래칫은 돌리지 않는다
+	// editing a contract without permission blocks. The ratchet is not run
 	const r = bad.length ? { broken: [], kept: 0 } : await ratchet(wt, run, tidy);
 	const sec = await security(changed, wt, run);
 	let fail: Failed | undefined;
-	// 위험 경로 정본은 CLAUDE.md의 Risk paths 하나다(뿌리 #49 정한 것 6). PR 쪽에서 못 찾으면 막는다
+	// The single source of risk paths is Risk paths in CLAUDE.md (root #49 decision 6). Block if it cannot be found on the PR side
 	if (section(head.md) === undefined)
 		fail = {
 			why: "CLAUDE.md has no Risk paths section (the source of truth for risk paths: list the paths in backticks under a `# Risk paths` heading)",
@@ -343,7 +343,7 @@ export async function judge(wt: string, run: Run, pr?: Pr) {
 	return { fail, wait, report };
 }
 
-// CI 잡: judge를 PR 체크아웃에서 돌려 결과를 로그와 잡 요약에 보인다. 막힘이면 체크가 빨강, 표시면 초록에 경고
+// CI job: runs judge on the PR checkout and shows the result in the log and job summary. Blocked means a red check, flagged means green with a warning
 if (import.meta.main) {
 	const { values } = parseArgs({
 		options: { dir: { type: "string", default: "." } },

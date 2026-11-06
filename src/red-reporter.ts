@@ -1,5 +1,5 @@
-// 처음엔 빨강 검사용 node:test 리포터: 스위트 말고 테스트마다 {name, ok, error} 한 줄 JSON.
-// 건너뛴 테스트(skip·todo)는 test:pass로 와서 빨강이 아닌 것으로 친다
+// node:test reporter for the red-first check: one JSON line {name, ok, error} per test, not per suite.
+// Skipped tests (skip, todo) arrive as test:pass and count as not red
 import type { TestEvent } from "node:test/reporters";
 
 export default async function* (source: AsyncIterable<TestEvent>) {

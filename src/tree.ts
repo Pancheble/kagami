@@ -1,14 +1,14 @@
-// T2 이슈 구조: 뿌리 이슈에서 하위 이슈와 blocked-by를 따라 트리를 읽어 JSON으로 내놓는다.
-// 실행: node src/tree.ts --repo owner/name --root <이슈 번호>
-//       node src/tree.ts --repo owner/name --labels   (라벨 만들기. 사람 gh 계정으로 돈다)
+// T2 issue structure: from the root issue, follows sub-issues and blocked-by to read the tree and output JSON.
+// Run: node src/tree.ts --repo owner/name --root <issue number>
+//       node src/tree.ts --repo owner/name --labels   (creates labels. Runs as the human's gh account)
 import { parseArgs } from "node:util";
 import { type Run, sh } from "./run.ts";
 
 type State = "open" | "closed";
 export type Comment = {
 	id: number;
-	author: string; // 단 계정. 지워진 계정이면 ""
-	type?: string; // User · Bot. 모르면 없음
+	author: string; // the account that wrote it. "" if the account was deleted
+	type?: string; // User · Bot. Absent if unknown
 	assoc?: string; // author_association(OWNER · MEMBER · COLLABORATOR …)
 	body: string;
 	createdAt: string;
@@ -23,12 +23,12 @@ export type Tree = {
 	body: string;
 	assignees: string[];
 	blockedBy: { number: number; state: State }[];
-	scope: string[]; // 잎의 "Scope"(옛 "범위") 칸 경로들. 노드는 []
-	comments: Comment[]; // 기록(needs-decision·blocked 등)과 활동을 읽는다
+	scope: string[]; // paths in the leaf's "Scope" field (or the old Korean one). [] for nodes
+	comments: Comment[]; // reads records (needs-decision, blocked and so on) and activity
 	children: Tree[];
 };
 
-// 담당은 라벨이 아니라 이슈 assignee로 둔다. 기록 라벨은 AGENTS.md "기록 형식"의 표시어와 같다
+// Ownership is the issue assignee, not a label. Record labels match the markers in AGENTS.md "Record format"
 const LABELS = [
 	["node", "Node issue", "1D76DB"],
 	["leaf", "Leaf issue", "0E8A16"],
@@ -65,7 +65,7 @@ export async function ensureLabels(repo: string, run: Run) {
 		]);
 }
 
-// ponytail: 댓글 말고는 연결마다 100개까지, 같은 저장소만 본다. 넘으면 페이지 넘기기를 붙인다
+// ponytail: up to 100 per connection except comments, same repo only. Add paging if there are more
 const PAGE =
 	"pageInfo { hasNextPage endCursor } nodes { databaseId author { login __typename } authorAssociation body createdAt updatedAt }";
 const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
@@ -80,7 +80,7 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
-// 댓글은 기록이 있어 끝까지 읽는다
+// comments hold records, so read them to the end
 const MORE = `query($owner: String!, $name: String!, $number: Int!, $after: String!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) { comments(first: 100, after: $after) { ${PAGE} } }
@@ -112,7 +112,7 @@ type Page = {
 
 const lower = (s: string) => s.toLowerCase() as State;
 
-// "## Scope"(옛 "## 범위") 칸에서 "- 경로" 줄만 읽는다. 백틱은 벗긴다
+// Reads only "- path" lines from the "## Scope" field (or the old Korean one). Strips backticks
 export function scope(body: string): string[] {
 	const sec = body
 		.split(/^## /m)

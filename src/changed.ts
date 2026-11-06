@@ -1,12 +1,12 @@
-// PR TL;DR의 Changed 줄을 센다. guard.ts facts()가 세는 사실(계약, 위험 경로, 지운 테스트, 의존성)에 새 이슈만 더한다.
-// 세기만 한다. plan changes와 Decided는 PR을 쓰는 쪽이 채운다
-// 새 이슈 = 잎의 하위 이슈(쪼개기) + 잎 이슈의 **discovered** #N 기록(AGENTS.md 기록 형식)
-// 실행: node src/changed.ts [--base origin/dev] [--issue <잎 번호>]  (잎 번호가 없으면 브랜치 leaf/<번호>-에서 읽는다)
+// Counts the Changed line of the PR TL;DR. Adds only new issues to the facts guard.ts facts() counts (contracts, risk paths, deleted tests, dependencies).
+// Counts only. The one writing the PR fills plan changes and Decided
+// New issues = the leaf's sub-issues (split) + **discovered** #N records on the leaf issue (AGENTS.md record format)
+// Run: node src/changed.ts [--base origin/dev] [--issue <leaf number>]  (without a leaf number, reads it from the git branch leaf/<number>-)
 import { parseArgs } from "node:util";
 import { type Facts, facts } from "./guard.ts";
 import { sh } from "./run.ts";
 
-// 첫 줄이 **discovered** #N 으로 시작하는 댓글만 센다
+// Counts only comments whose first line starts with **discovered** #N
 export const newIssues = (sub: number[], comments: string[]): number[] => [
 	...new Set([
 		...sub,
@@ -18,7 +18,7 @@ export const newIssues = (sub: number[], comments: string[]): number[] => [
 ];
 
 const list = (xs: string[]) => (xs.length ? xs.join(", ") : "None");
-// AGENTS.md "PR TL;DR format"의 칸 순서. facts()가 세는 지운 테스트는 맨 뒤에 붙인다
+// Field order of AGENTS.md "PR TL;DR format". Deleted tests, which facts() counts, go at the very end
 export const line = (f: Facts, issues: number[]) =>
 	[
 		`Changed: new issues ${list(issues.map((n) => `#${n}`))}`,

@@ -3,22 +3,22 @@ import { test } from "node:test";
 import { line, newIssues } from "./changed.ts";
 import { facts } from "./guard.ts";
 
-test("새 이슈: 하위 이슈와 **discovered** 기록의 번호를 겹치지 않게 모은다", () => {
+test("new issues: gathers numbers from sub-issues and **discovered** records without duplicates", () => {
 	assert.deepEqual(
 		newIssues(
 			[41, 42],
 			[
-				"**discovered** #43 로그가 안 남는다. 찾은 곳: src/x.ts",
-				"**needs-decision** #44 말고 ① …",
-				"그냥 댓글 **discovered** #45",
-				"**discovered** #42 하위 이슈와 겹침",
+				"**discovered** #43 no log is written. Found in: src/x.ts",
+				"**needs-decision** not #44 ① …",
+				"just a comment **discovered** #45",
+				"**discovered** #42 duplicates a sub-issue",
 			],
 		),
 		[41, 42, 43],
 	);
 });
 
-test("Changed 줄: facts()가 센 것과 새 이슈를 TL;DR 칸 순서대로 적고, 없으면 None", () => {
+test("Changed line: writes what facts() counted and new issues in TL;DR field order, None if empty", () => {
 	const md = "# Risk paths\n\n- `src/guard.ts`\n- `hooks/`\n";
 	const f = facts(
 		[

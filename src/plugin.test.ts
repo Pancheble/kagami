@@ -1,4 +1,4 @@
-// #82: 설치 화면과 `/` 목록의 description은 영어(한글 없음). 문구가 표와 같은지는 평가자가 diff로 본다
+// #82: descriptions on the install screen and in the `/` list are English (no Hangul). The evaluator checks the wording against the table in the diff
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -11,7 +11,7 @@ const json = (f: string) =>
 		readFileSync(new URL(`../.claude-plugin/${f}`, import.meta.url), "utf8"),
 	);
 
-test("설치 화면·스킬·에이전트 description은 비어 있지 않고 한글이 없다", () => {
+test("install screen, skill and agent descriptions are not empty and have no Hangul", () => {
 	const plugin = json("plugin.json");
 	const market = json("marketplace.json");
 	const c = components(ROOT);
@@ -29,7 +29,7 @@ test("설치 화면·스킬·에이전트 description은 비어 있지 않고 �
 		]),
 	];
 	for (const [where, d] of all) {
-		assert.ok(d?.trim(), `${where}: 비어 있다`);
-		assert.doesNotMatch(d, /[ㄱ-ㆎ가-힣]/, `${where}: 한글이 있다`);
+		assert.ok(d?.trim(), `${where}: empty`);
+		assert.doesNotMatch(d, /[ㄱ-ㆎ가-힣]/, `${where}: has Hangul`);
 	}
 });

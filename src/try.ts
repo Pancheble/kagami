@@ -1,9 +1,9 @@
-// #51 잎 4: /kagami:try의 "괜찮다" 마무리. 확인 답을 셋으로 나누는 것은 CC가 한다. 여기서는 태그를 달지와 Release 설명만 정한다
-// v1.0.0 전에는 태그와 Release 없이 큰 가지만 닫는다(AGENTS.md "Trying a branch")
-// 계약: contracts/51/try.contract.ts
+// #51 leaf 4: the "it's fine" ending of /kagami:try. CC sorts the try answer into three. This only decides whether to tag and the Release description
+// Before v1.0.0, close only the branch, with no tag and no Release (AGENTS.md "Trying a branch")
+// Contract: contracts/51/try.contract.ts
 
-// version은 plugin.json version. titles는 그 큰 가지 잎들의 PR 제목(머지 순서)
-// tag: 달 태그(`v<version>`). 1.0.0보다 낮으면 없다. notes: Release 설명, 제목마다 "- <제목>" 한 줄
+// version is plugin.json version. titles are the PR titles of that branch's leaves (merge order)
+// tag: the tag to put (`v<version>`). None below 1.0.0. notes: the Release description, one "- <title>" line per title
 export function finish(
 	version: string,
 	titles: string[],
@@ -14,7 +14,7 @@ export function finish(
 		: { notes };
 }
 
-// node src/try.ts <version> [잎 PR 제목...] → {tag?, notes} JSON
+// node src/try.ts <version> [leaf PR title...] → {tag?, notes} JSON
 if (import.meta.main) {
 	const [version, ...titles] = process.argv.slice(2);
 	if (!version) throw new Error("Usage: node src/try.ts <version> [title...]");

@@ -5,11 +5,11 @@ import type { Issue } from "./next.ts";
 import type { Run } from "./run.ts";
 import { ensureLabels, readTree } from "./tree.ts";
 
-// GraphQL 응답 모양 그대로의 가짜 이슈들
+// fake issues in the exact shape of the GraphQL response
 const issues: Record<number, object> = {
 	1: {
 		number: 1,
-		title: "뿌리",
+		title: "Root",
 		body: "",
 		state: "OPEN",
 		labels: { nodes: [{ name: "node" }] },
@@ -20,7 +20,7 @@ const issues: Record<number, object> = {
 	},
 	2: {
 		number: 2,
-		title: "가지",
+		title: "Branch",
 		body: "",
 		state: "OPEN",
 		labels: { nodes: [{ name: "node" }] },
@@ -31,7 +31,7 @@ const issues: Record<number, object> = {
 	},
 	3: {
 		number: 3,
-		title: "잎 A",
+		title: "Leaf A",
 		body: "## 목표\n\n무엇\n\n## 범위\n\n<!-- 주석 -->\n- `src/a.ts`\n- src/b/\n\n## 기다릴 티켓\n\n- #4\n",
 		state: "OPEN",
 		labels: { nodes: [{ name: "leaf" }, { name: "blocked" }] },
@@ -58,7 +58,7 @@ const issues: Record<number, object> = {
 	},
 	4: {
 		number: 4,
-		title: "잎 B",
+		title: "Leaf B",
 		body: "",
 		state: "CLOSED",
 		labels: { nodes: [{ name: "leaf" }] },
@@ -79,13 +79,13 @@ function fake() {
 	return { calls, run };
 }
 
-test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. 라벨과 본문도 읽는다", async () => {
+test("reads the tree from the root by following sub-issues and blocked-by, with labels and bodies", async () => {
 	const { calls, run } = fake();
 	const tree = await readTree("o/r", 1, run);
-	const _asIssue: Issue = tree; // next.ts ready()에 그대로 넘긴다
+	const _asIssue: Issue = tree; // passed to next.ts ready() as is
 	assert.deepEqual(tree, {
 		number: 1,
-		title: "뿌리",
+		title: "Root",
 		state: "open",
 		kind: "node",
 		labels: ["node"],
@@ -97,7 +97,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. �
 		children: [
 			{
 				number: 2,
-				title: "가지",
+				title: "Branch",
 				state: "open",
 				kind: "node",
 				labels: ["node"],
@@ -109,7 +109,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. �
 				children: [
 					{
 						number: 4,
-						title: "잎 B",
+						title: "Leaf B",
 						state: "closed",
 						kind: "leaf",
 						labels: ["leaf"],
@@ -124,7 +124,7 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. �
 			},
 			{
 				number: 3,
-				title: "잎 A",
+				title: "Leaf A",
 				state: "open",
 				kind: "leaf",
 				labels: ["leaf", "blocked"],
@@ -155,12 +155,12 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. �
 	assert.ok(calls[0].includes("owner=o") && calls[0].includes("name=r"));
 });
 
-test("댓글은 100개를 넘어도 끝까지 페이지를 넘겨 읽는다", async () => {
+test("reads comments to the end, paging past 100", async () => {
 	const page = (ids: number[], next?: string) => ({
 		pageInfo: { hasNextPage: !!next, endCursor: next ?? null },
 		nodes: ids.map((id) => ({
 			databaseId: id,
-			body: `댓글 ${id}`,
+			body: `comment ${id}`,
 			createdAt: "2026-10-30T00:00:00Z",
 		})),
 	});
@@ -192,13 +192,13 @@ test("댓글은 100개를 넘어도 끝까지 페이지를 넘겨 읽는다", as
 	assert.equal(calls.length, 3);
 });
 
-test("없는 이슈면 번호를 말하며 실패한다", async () => {
+test("a missing issue fails, naming its number", async () => {
 	const run: Run = async () =>
 		JSON.stringify({ data: { repository: { issue: null } } });
 	await assert.rejects(readTree("o/r", 42, run), /#42/);
 });
 
-test("노드·잎과 기록 라벨을 덮어쓰기로 만든다", async () => {
+test("creates the node, leaf and record labels, overwriting existing ones", async () => {
 	const calls: string[] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args].join(" "));
@@ -216,7 +216,7 @@ test("노드·잎과 기록 라벨을 덮어쓰기로 만든다", async () => {
 		"spec-gap",
 		"discovered",
 	];
-	assert.equal(calls.length, want.length); // 옛 라벨(replan·human·stuck-*)은 안 만든다
+	assert.equal(calls.length, want.length); // old labels (replan, human, stuck-*) are not created
 	for (const l of want)
 		assert.ok(
 			calls.some((c) => c.startsWith(`gh label create ${l} -R o/r`)),
@@ -225,7 +225,7 @@ test("노드·잎과 기록 라벨을 덮어쓰기로 만든다", async () => {
 	assert.ok(calls.every((c) => c.includes("--force")));
 });
 
-test("이슈 템플릿에 블록 목록의 칸이 다 있다", () => {
+test("issue templates have every field in the block list", () => {
 	const read = (f: string) =>
 		readFileSync(
 			new URL(`../.github/ISSUE_TEMPLATE/${f}`, import.meta.url),
