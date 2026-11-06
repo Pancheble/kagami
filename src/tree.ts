@@ -23,7 +23,7 @@ export type Tree = {
 	body: string;
 	assignees: string[];
 	blockedBy: { number: number; state: State }[];
-	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
+	scope: string[]; // 잎의 "Scope"(옛 "범위") 칸 경로들. 노드는 []
 	comments: Comment[]; // 기록(needs-decision·blocked 등)과 활동을 읽는다
 	children: Tree[];
 };
@@ -104,9 +104,11 @@ type Page = {
 
 const lower = (s: string) => s.toLowerCase() as State;
 
-// "## 범위" 칸에서 "- 경로" 줄만 읽는다. 백틱은 벗긴다
+// "## Scope"(옛 "## 범위") 칸에서 "- 경로" 줄만 읽는다. 백틱은 벗긴다
 export function scope(body: string): string[] {
-	const sec = body.split(/^## /m).find((s) => s.startsWith("범위"));
+	const sec = body
+		.split(/^## /m)
+		.find((s) => s.startsWith("Scope") || s.startsWith("범위"));
 	return sec ? [...sec.matchAll(/^- `?([^`\s]+)`?/gm)].map((m) => m[1]) : [];
 }
 

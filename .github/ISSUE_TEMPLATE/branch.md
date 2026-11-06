@@ -1,26 +1,26 @@
 ---
-name: 큰 가지
-about: 뿌리 바로 아래 노드. 잎이 다 닫히면 사람이 써 보고 확인한다. 잎은 하위 이슈로 단다
+name: Branch
+about: A node right under the root. When all its leaves are closed, the human tries it. Leaves go under it as sub-issues
 title: ""
 labels: node
 ---
 
-## 목표
+## Goal
 
-<!-- 뿌리 성공 기준 중 이 큰 가지가 맡는 것. "무엇을"은 사람만 바꾼다 -->
+<!-- Which of the root's success criteria this branch covers. Only the human changes the "what" -->
 
-## 끝 기준
+## Done when
 
-<!-- 한 줄에 하나. 평가자가 확인 방법대로 돌려 볼 수 있게 쓴다. 큰 가지 확인의 1단계(평가자)가 이걸 본다 -->
+<!-- One per line. Write each so the evaluator can run its check. Step 1 of trying a branch (the evaluator) reads this -->
 
-## 써 볼 시나리오
+## Try-it scenario
 
-<!-- 사람이 써 볼 3~5단계. 번호를 매기고, 단계마다 무엇을 하면 무엇이 보여야 하는지 쓴다. 추천 순서를 말할 때는 "확인 중에는 그 큰 가지가 추천 1번, 다음이 …"로 쓴다(확인하는 동안에는 이 큰 가지의 확인이 추천 1번이다) -->
+<!-- 3–5 steps for the human to try. Number them, and for each step say what to do and what should show. When giving the recommendation order, write "while trying, this branch is recommendation 1, then …" (while it is being tried, trying this branch is recommendation 1) -->
 
-## 자식끼리의 약속
+## Child contracts
 
-<!-- 잎들이 서로 기대는 인터페이스와 그걸 지키는 계약 테스트 경로(contracts/<이 이슈 번호>/). 잎으로 쪼갤 때 채운다 -->
+<!-- Interfaces the leaves rely on from each other, and the contract tests that keep them (contracts/<this issue number>/). Fill in when splitting into leaves -->
 
-## 바뀐 약속
+## Contract changes
 
-<!-- 여기는 비워 둔다. 약속을 바꾼 잎마다 이 이슈에 `**contract-change** #<잎>이 <무엇을> <넓힘/병렬 변경 몇 단계>. PR #…` 댓글을 남기고 `contract-change` 라벨을 붙인다(AGENTS.md "기록 형식"). 본문을 고치지 않아 여러 잎이 동시에 써도 부딪히지 않는다 -->
+<!-- Leave this empty. Each leaf that changes a contract leaves a `**contract-change** #<leaf> <what> <widened / parallel change step n>. PR #…` comment on this issue and adds the `contract-change` label (the record format in AGENTS.md). The body isn't edited, so several leaves can write at once without clashing -->

@@ -1,30 +1,30 @@
 ---
-name: 뿌리
-about: 기획 대화에서 뽑은 뿌리 명세. 큰 가지는 하위 이슈로 단다. 칸이 다 있는지는 명세 점검(src/spec.ts)이 센다
+name: Root
+about: The root spec drawn from the planning conversation. Branches go under it as sub-issues. The spec check (src/spec.ts) counts whether every section is here
 title: ""
 labels: ""
 ---
 
-## 기획 문서
+## Plan document
 
-<!-- 원본인 기획 문서의 링크나 경로. 이 이슈는 거기서 뽑은 것이다. 고칠 땐 기획 문서부터 -->
+<!-- Link or path to the plan document this issue was drawn from. It is the source: when something changes, change the plan document first -->
 
-## 성공 기준
+## Success criteria
 
-<!-- 한 줄에 하나: "- <평가자가 돌려볼 수 있는 기준> (확인: <어떻게 확인하나>)". "로그인이 잘 된다"가 아니라 "가입한 이메일로 로그인하면 대시보드가 뜬다" -->
+<!-- One per line: "- <a criterion the evaluator can run> (check: <how to check it>)". Not "login works" but "logging in with a registered email shows the dashboard" -->
 
-## 위험 경로
+## Risk paths
 
-<!-- "CLAUDE.md 참고"만 적는다. 정본은 대상 저장소 CLAUDE.md의 Risk paths 하나다. 되돌릴 수 없는 곳(인증·권한·결제·삭제·마이그레이션)의 경로는 거기에 백틱으로 더한다 -->
+<!-- Write only "See CLAUDE.md". The single source is Risk paths in the target repo's CLAUDE.md. Add paths that can't be undone (auth, permissions, payments, deletion, migrations) there, in backticks -->
 
-## 평가자 준비물
+## Evaluator setup
 
-<!-- 첫 잎 앞에 준비할 테스트 계정, 시드 데이터. 없으면 "없음" -->
+<!-- Test accounts and seed data to prepare before the first leaf. If none, "None" -->
 
-## 스택과 ADR
+## Stack and ADRs
 
-<!-- 기술 스택과 큰 구조. 고른 것, 이유, 버린 대안(ADR) -->
+<!-- Tech stack and big structure. What was chosen, why, and the alternatives dropped (ADRs) -->
 
-## 안 할 것
+## Out of scope
 
-<!-- 이번 뿌리에서 하지 않는 것. 없으면 "없음" -->
+<!-- What this root will not do. If none, "None" -->

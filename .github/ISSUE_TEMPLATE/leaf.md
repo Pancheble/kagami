@@ -1,26 +1,26 @@
 ---
-name: 잎
-about: 한 세션, 몇 시간 안에 끝나는 티켓. 부모 노드의 하위 이슈로 단다
+name: Leaf
+about: A ticket that finishes in one session, within a few hours. Goes under its parent node as a sub-issue
 title: ""
 labels: leaf
 ---
 
-## 목표
+## Goal
 
-<!-- 부모 목표 중 이 잎이 맡는 것 한 줄 -->
+<!-- One line: the part of the parent's goal this leaf covers -->
 
-## 지킬 약속
+## Contracts to keep
 
-<!-- 부모 이슈의 "자식끼리의 약속" 중 이 잎이 깨면 안 되는 것 -->
+<!-- The parent's child contracts this leaf must not break -->
 
-## 끝 기준 테스트
+## Done when
 
-<!-- 끝났다는 기준이 되는 테스트와 돌리는 명령 -->
+<!-- The tests that say it's done, and the command to run them -->
 
-## 범위
+## Scope
 
-<!-- 건드릴 파일·모듈. 바뀔 이유 하나 단위로. 한 줄에 하나씩 "- src/x.ts" 또는 "- src/dir/". 범위가 겹치는 잎은 동시에 고르지 않고, 비워 두면 모든 잎과 겹친다고 본다 -->
+<!-- Files and modules to touch, one reason to change at a time. One per line: "- src/x.ts" or "- src/dir/". Leaves whose scopes overlap aren't picked at the same time; an empty scope counts as overlapping every leaf -->
 
-## 기다릴 티켓
+## Waits on
 
-<!-- 먼저 닫혀야 하는 티켓은 여기 적지 말고 GitHub의 blocked-by로 건다 -->
+<!-- Don't list tickets that must close first here; link them with GitHub's blocked-by -->
