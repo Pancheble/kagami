@@ -10,6 +10,8 @@ AGENTS.md "한 번 일하는 순서" 5의 확인이다. 규칙은 AGENTS.md가 �
 
 ## 0. 시작
 
+- 아래 git 명령은 지금 저장소의 origin을 쓴다. `gh repo view --json nameWithOwner --jq .nameWithOwner`가 R이 아니면 멈추고, R을 클론한 곳에서 다시 부르라고 알린다
+
 - 뿌리를 찾는다: `gh api repos/R/issues/B/parent --jq .number`가 뿌리이고, 뿌리의 parent는 404여야 한다(B가 뿌리 바로 아래 노드). 아니면 멈추고 알린다
 - `node ${CLAUDE_PLUGIN_ROOT}/src/tree.ts --repo R --root <뿌리>`로 트리를 읽고 B 아래 잎이 다 닫혔는지 본다. 열린 잎이 있으면 멈추고 알린다
 - B가 할당되지 않았으면 AGENTS.md "할당"대로 고른 사람을 할당한다
