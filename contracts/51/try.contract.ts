@@ -1,23 +1,23 @@
-// #51 잎 4 (try)의 약속: "괜찮다"면 v1.0.0부터 태그 `v<version>`, 그 전에는 태그 없이. Release 설명은 잎 PR 제목
+// #51 leaf 4 (try) contract: on "it's fine", tag `v<version>` from v1.0.0, no tag before that. The Release description is the leaf PR titles
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finish } from "../../src/try.ts";
 
-const TITLES = ["feat: 플러그인 골격", "fix: next 순서"];
+const TITLES = ["feat: plugin skeleton", "fix: next order"];
 
-test("v1.0.0 전에는 태그가 없다", () => {
+test("no tag before v1.0.0", () => {
 	for (const v of ["0.0.0", "0.9.9"])
 		assert.equal(finish(v, TITLES).tag, undefined, v);
 });
 
-test("v1.0.0부터는 v<version> 태그", () => {
+test("v<version> tag from v1.0.0", () => {
 	assert.equal(finish("1.0.0", TITLES).tag, "v1.0.0");
 	assert.equal(finish("1.2.3", TITLES).tag, "v1.2.3");
 });
 
-test("Release 설명은 잎 PR 제목마다 한 줄", () => {
+test("Release description is one line per leaf PR title", () => {
 	assert.equal(
 		finish("1.0.0", TITLES).notes,
-		"- feat: 플러그인 골격\n- fix: next 순서",
+		"- feat: plugin skeleton\n- fix: next order",
 	);
 });
