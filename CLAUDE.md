@@ -10,7 +10,8 @@ kagami 방식(the kagami workflow)으로 일한다. 규칙은 위에서 불러�
 - 타입체크: `npm run typecheck`
 - 린트·포맷 검사: `npm run lint` (고치기: `npx biome check --write .`)
 - 테스트: `npm test` (`src/**/*.test.ts`, node:test)
-- 셋 다: `npm run check`
+- 계약·인수 테스트: `npm run contracts` (`contracts/**/*.ts`. 쪼갠 직후엔 아직 안 닫힌 잎의 계약이 빨갛다. CI는 돌리지 않는다)
+- 넷 다: `npm run check`
 - TypeScript는 빌드 없이 `node src/x.ts`로 바로 돈다. 그래서 enum·namespace·생성자 파라미터 프로퍼티처럼 지워지지 않는 문법은 못 쓰고, import에 `.ts` 확장자를 붙인다
 
 # Risk paths (여기 걸리면 동작 시나리오를 써서 사람 승인)

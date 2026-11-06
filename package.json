@@ -9,7 +9,8 @@
 		"typecheck": "tsc",
 		"lint": "biome ci .",
 		"test": "node --test",
-		"check": "npm run typecheck && npm run lint && npm test"
+		"contracts": "node --test 'contracts/**/*.ts'",
+		"check": "npm run typecheck && npm run lint && npm test && npm run contracts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.6.4",
