@@ -43,6 +43,10 @@ const CLAUDE_MD = `@AGENTS.md
 
 가운데 방식으로 일한다. 규칙은 위에서 불러온 \`AGENTS.md\`를 본다. 세션을 열면 \`/kagami:next\`로 준비된 일을 고른다.
 
+# Commands
+
+검사 명령(타입체크·린트·테스트 등과 셋을 한 번에 돌리는 것)을 한 줄에 하나씩 적는다. 평가자와 /kagami:build가 이 명령으로 검사한다. 비어 있으면 /kagami:build가 사람에게 묻는다.
+
 # Risk paths (여기 걸리면 동작 시나리오를 써서 사람 승인)
 
 - \`.github/workflows/\`
