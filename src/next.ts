@@ -1,9 +1,10 @@
 // #51 잎 2·3: /kagami:next가 세션을 열 때 보는 것. 고르기와 추천은 CC가 한다. 여기서는 세기만 한다
 // 잎 2: ready(준비된 일과 종류). 잎 3: stale, waiting, drift, leftover와 CLI
-// 계약: contracts/51/next.contract.ts
+// 계약: contracts/51/ready.contract.ts, contracts/51/next.contract.ts
+import { check } from "./spec.ts";
 
 export type State = "open" | "closed";
-// tree.ts Tree에서 쓰는 칸만. 잎 2가 Tree에 labels·body를 더하면 Tree를 그대로 넘길 수 있다
+// tree.ts Tree에서 쓰는 칸만. Tree를 그대로 넘길 수 있다(tree.test.ts가 타입으로 확인)
 export type Issue = {
 	number: number;
 	title: string;
@@ -22,9 +23,36 @@ export type Ready = { number: number; kind: Kind };
 
 // root는 뿌리 이슈. 큰 가지는 뿌리의 바로 아래 노드다. 트리 순서(앞순회)로 낸다.
 // 모두 공통: 열림, 할당 없음, blocked 라벨 없음, blocked-by가 다 닫힘. 닫힌 이슈 아래는 보지 않는다
-export function ready(_root: Issue): Ready[] {
-	throw new Error("not implemented");
+export function ready(root: Issue): Ready[] {
+	const out: Ready[] = [];
+	const walk = (i: Issue, depth: number) => {
+		if (i.state === "closed") return;
+		const free =
+			!i.assignees.length &&
+			!i.labels.includes("blocked") &&
+			i.blockedBy.every((b) => b.state === "closed");
+		const kind =
+			i.kind === "leaf"
+				? "build"
+				: depth === 0 && check(i.body).length
+					? "plan"
+					: !i.children.length
+						? "split"
+						: depth === 1 && allClosed(leaves(i))
+							? "try"
+							: undefined;
+		if (free && kind) out.push({ number: i.number, kind });
+		for (const c of i.children) walk(c, depth + 1);
+	};
+	walk(root, 0);
+	return out;
 }
+
+const leaves = (i: Issue): Issue[] =>
+	i.kind === "leaf" ? [i] : i.children.flatMap(leaves);
+// 잎이 하나도 없으면 확인할 것이 없다
+const allClosed = (l: Issue[]) =>
+	l.length > 0 && l.every((x) => x.state === "closed");
 
 // 이슈 번호 → 마지막 활동 시각(ISO). 활동 = 할당된 때, 잎 브랜치 푸시, PR(열기·커밋·댓글), 이슈 댓글 중 가장 늦은 것. CLI가 모은다
 export type Activity = Record<number, string>;
