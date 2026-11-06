@@ -1,0 +1,12 @@
+{
+	"name": "kagami",
+	"description": "kagami 하네스 플러그인",
+	"owner": { "name": "baekchan" },
+	"plugins": [
+		{
+			"name": "kagami",
+			"source": "./",
+			"description": "사람이 흐름을 쥐는 가운데 방식 하네스"
+		}
+	]
+}

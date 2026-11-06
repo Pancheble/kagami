@@ -21,6 +21,7 @@
 - `src/run.ts` (명령 실행 sh와, 가드가 대상 저장소 코드를 인증 없이 돌리는 noKey)
 - `src/guard.ts` (CI 가드: PR마다 계약 수정·래칫·위험 경로를 판정해 빨강·초록·표시로 보인다)
 - `hooks/` (dev 직접 push를 막는 git pre-push hook)
+- `skills/`, `agents/`, `.claude-plugin/` (플러그인 kagami의 스킬·평가자·마켓플레이스. `.claude/agents/`의 보호를 새 위치로 옮긴다)
 - 이 목록 자체 (백틱으로 적은 경로만 사실 계산이 읽는다. 목록이 바뀌면 그것도 위험 경로로 센다)
 
 # Rules
