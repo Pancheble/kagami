@@ -16,7 +16,7 @@ export type Issue = {
 	children: Issue[];
 };
 
-// build: 준비된 잎 구현 / split: 자식 없는 노드 쪼개기 / plan: 칸이 빠진 뿌리 기획 대화 / try: 잎이 다 닫힌 큰 가지 확인
+// build: 준비된 잎 구현 / split: 자식 없는 노드 쪼개기(칸이 다 있고 자식 없는 뿌리 포함) / plan: 칸이 빠진 뿌리 기획 대화 / try: 잎이 다 닫힌 큰 가지 확인
 export type Kind = "build" | "split" | "plan" | "try";
 export type Ready = { number: number; kind: Kind };
 

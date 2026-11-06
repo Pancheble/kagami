@@ -1,4 +1,4 @@
-// #51 잎 2 (next: 준비된 일)의 약속: ready(뿌리)가 준비된 일과 종류를 트리 순서로 낸다
+// #51 잎 2 (next: 준비된 일)의 약속: ready(뿌리)가 준비된 일과 종류를 트리 순서로 낸다. 칸이 다 있고 자식이 없는 뿌리도 split(큰 가지로 쪼개기)
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { type Issue, ready } from "../../src/next.ts";
@@ -85,4 +85,11 @@ test("칸이 빠진 뿌리는 기획 대화다. 할당된 뿌리는 뺀다", () 
 	assert.deepEqual(ready(issue(1, { body: FULL, children: [issue(2)] })), [
 		{ number: 2, kind: "split" },
 	]);
+});
+
+test("칸이 다 있고 자식이 없는 뿌리는 큰 가지로 쪼갠다(split). 할당된 뿌리는 뺀다", () => {
+	assert.deepEqual(ready(issue(1, { body: FULL })), [
+		{ number: 1, kind: "split" },
+	]);
+	assert.deepEqual(ready(issue(1, { body: FULL, assignees: ["someone"] })), []);
 });
