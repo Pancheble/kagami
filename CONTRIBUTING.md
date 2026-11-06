@@ -1,69 +1,69 @@
 # CONTRIBUTING
 
-이 프로젝트는 kagami의 "가운데" 방식으로 일한다. 사람이 원하는 것과 책임을 갖고, Claude Code(CC)는 그걸 키우는 도구다. 에이전트가 따르는 규칙은 `AGENTS.md`에 있다. 이 문서에는 사람이 알아야 할 것만 적는다.
+This project works the kagami workflow. The human owns what they want and the responsibility for it; Claude Code (CC) is the tool that amplifies it. The rules agents follow are in `AGENTS.md`. This document holds only what the human needs to know.
 
-## 일이 어디 있나
+## Where the work is
 
-일은 GitHub 이슈의 트리로 관리한다: 뿌리 › 큰 가지 › 노드 › 잎. 잎 하나가 PR 하나다. "준비됨"은 열려 있고, 기다릴 것(blocked-by)이 다 닫혔고, 아무에게도 할당되지 않은 것이다. 트리에서 계산하니 따로 표시하지 않는다.
+Work is managed as a tree of GitHub issues: root › branch › node › leaf. One leaf is one PR. "Ready" means open, everything it waits on (blocked-by) is closed, and assigned to no one. It is computed from the tree, so it is not marked separately.
 
-## 한 번 일하는 법
+## How one round of work goes
 
-1. CC 세션을 연다. CC가 답이 달린 `needs-decision`과 오래된 할당을 정리하고, 성격이 다른 잎 2~3개를 이유와 함께 추천한다. CC가 가장 권하는 것이 1번이다.
-2. 하나를 고른다. 그 이슈가 나에게 할당되고, 다른 사람의 CC는 이제 그 일을 추천하지 않는다. 추천 밖에서 골라도 된다. 그러면 CC가 `off-recommendation` 기록에 이유를 남긴다.
-3. 계획 알림(`Where / Why / Scope / Done when / Decide`)을 읽는다. CC는 `Decide`가 있을 때만 멈춘다.
-4. CC가 구현하고, 쓰기 권한 없는 평가 에이전트가 끝 기준과 범위를 확인한 뒤 PR을 연다.
-5. PR의 TL;DR(`Where / What / Changed / Decided`)을 읽는다. CI가 초록이면 세션에서 동의한다. 머지 권한 창이 그 동의다. 잎 PR은 squash로 머지된다.
-6. 세션을 닫는다. 다음 일은 새 세션에서 한다.
+1. Open a CC session. CC cleans up answered `needs-decision` issues and stale assignments, then recommends 2–3 leaves of different kinds, with reasons. CC's top recommendation is number 1.
+2. Pick one. The issue is assigned to you, and other people's CC no longer recommends it. You can pick outside the recommendations. If you do, CC leaves the reason in an `off-recommendation` record.
+3. Read the plan notice (`Where / Why / Scope / Done when / Decide`). CC stops only when there is a `Decide`.
+4. CC builds it, an evaluator agent without write access checks the done criteria and scope, and then CC opens the PR.
+5. Read the PR's TL;DR (`Where / What / Changed / Decided`). When CI is green, agree in the session. The merge permission prompt is that consent. Leaf PRs are squash-merged.
+6. Close the session. Do the next piece of work in a new session.
 
-## 큰 가지 확인
+## Trying a branch
 
-잎이 다 닫힌 큰 가지는 내가 써 보고 확인한다. 큰 가지 이슈는 확인이 끝날 때까지 열려 있다. 평가 에이전트가 자동 끝 기준을 보고, CC가 실행 방법과 써 볼 시나리오를 안내한다. 써 보고 말로 답하면 CC가 셋 중 하나로 나누어 한 줄로 되묻는다.
+A branch with every leaf closed is something you try out yourself. The branch issue stays open until the try is done. The evaluator agent checks the automatic done criteria, and CC explains how to run it and walks you through the try-it scenario. When you try it and answer in your own words, CC sorts the answer into one of three and confirms it in one line.
 
-- **괜찮다:** 그 커밋에 릴리즈 태그 `v*`와 GitHub Release가 생기고 큰 가지가 닫힌다. 태그 push 권한 창이 내 동의다
-- **고칠 게 있다:** 큰 가지 아래 새 잎이 생긴다
-- **원한 게 달랐다:** 명세를 바꾸는 안이 `needs-decision`으로 올라온다
+- **It's fine:** a release tag `v*` and a GitHub Release are created on that commit, and the branch is closed. The tag push permission prompt is your consent
+- **Needs fixes:** new leaves are created under the branch
+- **Not what I wanted:** a proposal to change the spec is raised as `needs-decision`
 
-첫 릴리즈는 `v1.0.0`이다. `v1.0.0` 전에는 태그 없이 닫는다: 확인이 "괜찮다"여도 태그와 GitHub Release 없이 큰 가지만 닫는다.
+The first release is `v1.0.0`. Before `v1.0.0`, close without a tag: even when the answer is "it's fine", close only the branch, with no tag and no GitHub Release.
 
-## 할당과 이어받기
+## Assigning and taking over
 
-- 할당된 채 3일 동안 활동(브랜치 푸시, PR, 이슈 댓글)이 없으면 다음 세션이 할당을 푼다. PR이 머지 없이 닫히거나 `blocked`가 남아도 풀린다. 풀릴 때마다 이슈에 `**released**` 기록이 남는다.
-- 내가 손 뗄 일이면 직접 할당을 풀어도 된다.
-- 예전 브랜치가 남은 잎을 고르면, CC가 남은 diff와 기록을 보여 주고 이어갈지 처음부터 할지 묻는다. 다른 사람의 작업을 이어가면 `Co-authored-by:`로 원래 작성자를 남긴다.
+- If assigned work has no activity (leaf branch push, PR, issue comment) for 3 days, the next session unassigns it. It is also unassigned when the PR is closed without merging or `blocked` is left. Every unassign leaves a `**released**` record on the issue.
+- If you are letting go of the work, you can unassign it yourself.
+- If you pick a leaf that still has an old leaf branch, CC shows the remaining diff and records and asks whether to continue it or start over. If you continue someone else's work, the original author is credited with `Co-authored-by:`.
 
-## 사람이 정하는 것
+## What the human decides
 
-되돌리기 어려운 결정은 CC가 혼자 정하지 않고 사람에게 올린다: 보이는 동작, 계약·데이터 형식·상태 위치, 권한·보안·위험 경로, 스택·큰 구조, 범위 변경. CC는 안 2~3개와 좋은 점/대가, 추천 하나를 내고, 고르는 건 사람이다. 노드를 잎으로 쪼갤 때도 같다.
+CC does not make decisions that are hard to undo on its own; it raises them to the human: visible behavior; contracts, data formats and where state lives; permissions, security and risk paths; stack and overall structure; changes of scope. CC offers 2–3 options with good/bad and one recommendation, and the human picks. The same goes for splitting a node into leaves.
 
-## 하지 않는 것
+## What we don't do
 
-- dev에 직접 푸시하지 않는다. 브랜치는 dev 하나이고, 사람이 써 본 시점은 태그로 남는다: 릴리즈 `v*`, 보관 `archive/*`.
-- 한 세션에서 잎 두 개를 하지 않는다.
-- 계약 테스트(`contracts/`)를 말없이 고치지 않는다. 바꿨다면 TL;DR `Changed`에 있어야 하고, CI가 따로 표시한다.
+- Do not push directly to dev. dev is the only git branch, and the points where the human tried the work are marked with tags: release `v*`, archive `archive/*`.
+- Do not do two leaves in one session.
+- Do not quietly edit contract tests (`contracts/`). If you changed one, it must be in the TL;DR's `Changed`, and CI flags it separately.
 
-## 커밋과 PR 이름
+## Naming commits and PRs
 
-- 브랜치: `leaf/<번호>-<짧은-이름>`
-- PR 제목: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). squash 후 dev 커밋 메시지가 된다
-- PR 본문: `Closes #<잎 번호>`
+- Leaf branch: `leaf/<number>-<short-name>`
+- PR title: Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`). After the squash, it becomes the dev commit message
+- PR body: `Closes #<leaf number>`
 
-## 기록 읽는 법
+## Reading the records
 
-기록은 이슈 댓글이고, 첫 줄의 굵은 표시어와 같은 이름의 라벨이 붙는다.
+A record is an issue comment, and it gets a label of the same name as the bold marker on its first line.
 
-| 라벨 | 뜻 | 내가 할 것 |
+| Label | Meaning | What you do |
 |---|---|---|
-| `needs-decision` | 내 답을 기다린다 | 세션에서든 이슈 댓글에서든 답한다. 다음 세션의 CC가 댓글을 읽고 한 줄로 확인한 뒤 `**answer**`를 남기고 라벨을 뗀다 |
-| `split` | 노드를 어떻게 나눴나, 누가 골랐나 | 읽기만 |
-| `contract-change` | 계약이 넓어지거나 단계적으로 바뀌었다 | 다른 잎에 영향이 있는지 본다 |
-| `blocked` | 막혔다. 풀 일이 있으면 새 이슈가 blocked-by로 이어져 있다 | 다음 세션 추천에 올라온다 |
-| `off-recommendation` | 추천 대신 다른 걸 고른 이유 | 읽기만 |
-| `spec-gap` | 구현 중 찾은, 티켓에 없던 사실 | 범위를 바꿀지 본다 |
-| `discovered` | 하다가 새로 찾아 만든 이슈 | 트리 어디에 둘지 본다 |
+| `needs-decision` | Waiting for your answer | Answer, in a session or in an issue comment. The next session's CC reads the comment, confirms it in one line, leaves `**answer**`, and removes the label |
+| `split` | How the node was split and who picked | Just read it |
+| `contract-change` | A contract was widened or changed step by step | See whether it affects other leaves |
+| `blocked` | Blocked. If something has to be done to unblock it, a new issue is linked with blocked-by | It comes up in the next session's recommendations |
+| `off-recommendation` | Why something else was picked instead of a recommendation | Just read it |
+| `spec-gap` | A fact found while building that the ticket did not have | See whether the scope should change |
+| `discovered` | An issue newly found and created along the way | See where it belongs in the tree |
 
-`released`(할당이 풀린 이유)는 라벨 없이 기록만 남는다.
+`released` (why the work was unassigned) leaves only a record, with no label.
 
-## 더 읽을 것
+## More reading
 
-- `AGENTS.md`: CC가 따르는 규칙 전체
-- `docs/harness/가운데 설계.md`: 왜 이렇게 일하는지
+- `AGENTS.md`: the full set of rules CC follows
+- `docs/design.md`: why we work this way

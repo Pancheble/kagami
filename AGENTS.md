@@ -1,145 +1,145 @@
 # AGENTS.md
 
-이 저장소에서 일하는 에이전트는 모두 이 문서를 먼저 읽는다. 사람이 흐름을 쥐고, 에이전트는 고른 일 하나를 끝내고 기록을 남긴 뒤 끝난다. 이 흐름은 Claude Code 기준이다.
+Every agent working in this repository reads this document first. The human holds the flow; the agent finishes the one piece of work that was picked, leaves records, and ends. This workflow is written for Claude Code.
 
-## 트리 읽는 법
+## Reading the tree
 
-- 트리는 GitHub 이슈에만 있다. 뿌리 › 큰 가지 › 노드 › 잎은 하위 이슈로, 기다림은 blocked-by로 잇는다
-- 뿌리에는 기획 문서 링크, 성공 기준과 확인 방법, 위험 경로, 평가자 준비물, 스택과 ADR, 안 할 것이 있다
-- 노드 이슈에는 목표, 자식끼리의 약속, 바뀐 약속 기록이 있다
-- 잎 이슈에는 목표, 지킬 약속, 끝 기준, 범위(건드릴 파일과 폴더)가 있다
-- "준비됨" = 열려 있고, blocked-by가 다 닫혔고, 아무에게도 할당되지 않았다
-- 일을 시작할 때 읽는 것은 그 일의 이슈와 부모 이슈다. 다른 PR을 뒤지지 않는다
+- The tree lives only in GitHub issues. Root › branch › node › leaf are linked as sub-issues, and waiting is linked with blocked-by
+- The root has the plan document link, success criteria and how to check them, risk paths, evaluator setup, stack and ADRs, and what is out of scope
+- A node issue has its goal, the child contracts, and a record of contract changes
+- A leaf issue has its goal, contracts to keep, done criteria, and scope (the files and folders it touches)
+- "Ready" = open, every blocked-by is closed, and assigned to no one
+- When you start a piece of work, read its issue and its parent issue. Do not dig through other PRs
 
-## 한 번 일하는 순서
+## One round of work
 
-1. **정리:** 아래 "세션을 열면"을 한다
-2. **추천:** 준비된 일 중 성격이 다른 2~3개를 이유와 함께 낸다. 자기 추천을 1번에 둔다. "뭘 하고 싶어?"를 먼저 묻지 않는다
-3. **고름:** 사람이 고른다. 추천 밖의 것을 고르면 `off-recommendation` 기록을 남긴다
-4. **할당:** 아래 "할당"대로 고른 사람을 할당한다
-5. **역할:** 고른 일의 상태가 역할을 정한다. 칸이 빠진 뿌리는 기획 대화(`/kagami:plan`), 자식이 없는 노드는 쪼개기(아래 "쪼개기"), 준비된 잎은 구현, 잎이 다 닫힌 큰 가지는 확인(아래 "큰 가지 확인")
-6. **계획 알림:** 아래 형식으로 보여 준다. `Decide`가 없으면 바로 진행한다
-7. **구현:** `/kagami:build`로 테스트부터 쓴다. 명세에 없는 애매한 부분은 그 자리에서 묻는다
-8. **평가:** 평가자 에이전트(`kagami:evaluator`, 쓰기 권한 없음)에게 끝 기준, 범위, TL;DR을 판정받는다. FAIL이면 고치고 다시. 3번 FAIL이면 멈추고 사람에게 알린다
-9. **PR:** 아래 "커밋과 PR"대로 제목을 달고, 맨 위에 TL;DR을 달아 dev로 연다
-10. **머지:** CI가 초록이면 TL;DR을 보여 주고, 사람이 동의하면 `gh pr merge --squash --subject "<PR 제목> (#<PR 번호>)"`로 머지한다
-11. **기록하고 끝내기:** 아래 "끝내기 전에"를 하고, "클리어해도 돼요"라고 알린다
+1. **Clean up:** do "When you open a session" below
+2. **Recommend:** offer 2–3 ready pieces of work of different kinds, with reasons. Put your own recommendation first. Do not open with "What do you want to do?"
+3. **Pick:** the human picks. If they pick something outside the recommendations, leave an `off-recommendation` record
+4. **Assign:** assign the person who picked it, as in "Assigning" below
+5. **Role:** the state of the picked work sets the role. A root with empty fields is a planning conversation (`/kagami:plan`), a node with no children is a split (see "Splitting" below), a ready leaf is a build, and a branch with every leaf closed is a try (see "Trying a branch" below)
+6. **Plan notice:** show it in the format below. If there is no `Decide`, go ahead
+7. **Build:** write the tests first with `/kagami:build`. Ask on the spot about anything ambiguous the spec does not cover
+8. **Evaluate:** have the evaluator agent (`kagami:evaluator`, no write access) judge the done criteria, scope, and TL;DR. On FAIL, fix it and evaluate again. After 3 FAILs, stop and tell the human
+9. **PR:** title it as in "Commits and PRs" below, put the TL;DR at the very top, and open it against dev
+10. **Merge:** when CI is green, show the TL;DR, and when the human agrees, merge with `gh pr merge --squash --subject "<PR title> (#<PR number>)"`
+11. **Record and finish:** do "Before you finish" below, and say "You can clear the session now."
 
-## 세션을 열면
+## When you open a session
 
-추천하기 전에 두 가지를 정리한다.
+Before recommending, clean up two things.
 
-- `needs-decision` 라벨이 붙은 이슈의 댓글을 읽는다. 답이 있으면(세션에서든 GitHub에서든, 누가 썼든) 사람에게 한 줄로 확인한 뒤 `**answer**`를 남기고 라벨을 없앤다. 답이 없으면 다시 묻는다
-- 할당된 채 3일 동안 활동이 없는 일을 찾아 할당을 풀고 `**released**` 기록을 남긴다. 활동은 잎 브랜치 푸시, PR(열기·커밋·댓글), 이슈 댓글 중 하나라도 있는 것이다
+- Read the comments on issues labeled `needs-decision`. If there is an answer (in a session or on GitHub, from anyone), confirm it with the human in one line, then leave `**answer**` and remove the label. If there is no answer, ask again
+- Find work that has been assigned with no activity for 3 days, unassign it, and leave a `**released**` record. Activity is any of: a leaf branch push, a PR (opened, committed to, commented on), or an issue comment
 
-## 할당
+## Assigning
 
-- 잎만이 아니라 고른 일은 모두 할당한다(쪼개기, 기획 대화 포함). 할당은 한 명만
-- 할당하기 직전에 이슈를 다시 읽는다. 그사이 다른 사람이 가져갔으면 알리고 다시 추천한다
-- 푸는 때: PR이 머지되면 이슈가 닫히니 그대로 둔다. PR이 머지 없이 닫히거나 `blocked`를 남기면 풀고 `**released**`를 남긴다. 오래된 할당은 "세션을 열면"에서 푼다
-- 고른 잎에 예전 잎 브랜치(`leaf/<번호>-*`)가 남아 있으면, 그 diff와 이슈 기록을 보여 주고 이어갈지 처음부터 할지 사람에게 묻는다. 이어가고 원래 작성자가 다른 사람이면 커밋에 `Co-authored-by:`로 남긴다
+- Assign every picked piece of work, not only leaves (splits and planning conversations too). Assign one person only
+- Re-read the issue just before assigning. If someone else took it in the meantime, say so and recommend again
+- When to unassign: when the PR is merged, the issue closes, so leave it. If the PR is closed without merging or `blocked` is left, unassign and leave `**released**`. Unassign stale assignments in "When you open a session"
+- If an old leaf branch (`leaf/<number>-*`) remains for the picked leaf, show its diff and the issue records, and ask the human whether to continue it or start over. If you continue and the original author is someone else, credit them with `Co-authored-by:` in the commit
 
-## 계획 알림 형식
+## Plan notice format
 
 ```markdown
-Where: <뿌리> › <큰 가지> › #<번호> <이름>
-Why: 왜 이 일인지 (2~3줄)
-Scope: 이번에 할 것 (3줄 안)
-Done when: 끝 기준
-Decide: (있을 때만) 선택지 2~3개, 좋은 점/대가, 추천 하나
+Where: <root> › <branch> › #<number> <name>
+Why: why this work (2–3 lines)
+Scope: what will be done this time (within 3 lines)
+Done when: done criteria
+Decide: (only when needed) 2–3 options, good/bad, one recommendation
 ```
 
-## 사람에게 묻는 것
+## What to ask the human
 
-되돌리기 어려운 결정은 선택지로 묻고 기다린다. 나머지는 정하고 PR의 `Decided`에 남긴다.
+For decisions that are hard to undo, ask with options and wait. Decide the rest yourself and record it in the PR's `Decided`.
 
-- 사용자에게 보이는 동작이 바뀐다
-- 부품 사이의 약속이 바뀐다: 계약 테스트, 데이터 형식, 상태를 어디에 둘지
-- 권한과 보안: 인증, 권한, 비밀값, 뿌리에 적힌 위험 경로
-- 스택과 큰 구조
-- 티켓에서 벗어나거나 "안 할 것"을 해야 한다
+- Behavior users see changes
+- Contracts between parts change: contract tests, data formats, where state lives
+- Permissions and security: authentication, permissions, secrets, risk paths listed in the root
+- Stack and overall structure
+- You need to depart from the ticket or do something listed as out of scope
 
-## 쪼개기
+## Splitting
 
-- 자식이 없는 노드를 골랐거나 잎이 너무 커서 쪼개야 할 때, 쪼개는 안 2~3개를 좋은 점/대가와 함께 내고 추천 하나를 고른다
-- 사람이 고르면, 자식 잎 이슈(목표, 지킬 약속, 끝 기준, 범위)와 blocked-by를 만들고, 자식끼리의 약속은 `contracts/<노드번호>/`에 먼저 쓴다
-- 잎 조건: 한 세션에 끝난다 · 끝 기준이 테스트로 있다 · 범위가 분명하다. 이미 이 조건을 만족하면 쪼개지 않고 "그대로 잎"이라고 말한다
-- 고른 안과 버린 안은 노드 이슈에 `**split**` 기록으로 남기고 끝낸다
+- When you pick a node with no children, or a leaf is too big and has to be split, offer 2–3 ways to split it with good/bad for each, and pick one recommendation
+- When the human picks, create the child leaf issues (goal, contracts to keep, done criteria, scope) and the blocked-by links, and write the child contracts in `contracts/<node number>/` first
+- Leaf conditions: finishes in one session · done criteria exist as tests · scope is clear. If it already meets these, do not split it; say it "stays a leaf"
+- Record the chosen option and the rejected ones on the node issue as a `**split**` record, and finish
 
-## 잎 크기
+## Leaf size
 
-- 계획의 `Scope`가 3줄을 넘으면 시작하기 전에 쪼개자고 제안한다
-- 하는 중에 범위 밖 파일이 필요해지거나 바뀐 줄 수가 커지면 멈추고 알린다
-- 쪼갤 때는 그 잎을 노드로 바꾸고 자식 잎 이슈를 만든 뒤 끝낸다. 자식은 다음 세션에서 한다
+- If the plan's `Scope` is over 3 lines, propose splitting before you start
+- If, while working, you need files outside the scope or the changed line count grows large, stop and tell the human
+- To split, turn that leaf into a node, create the child leaf issues, and finish. The children are done in later sessions
 
-## 큰 가지 확인
+## Trying a branch
 
-잎이 다 닫힌 큰 가지는 사람이 써 보고 확인한다. 큰 가지 이슈는 확인이 끝날 때까지 열어 두고, 이슈에는 끝 기준과 써 볼 시나리오 3~5단계가 있다.
+A branch with every leaf closed is tried out by the human. The branch issue stays open until the try is done, and it has done criteria and a 3–5 step try-it scenario.
 
-1. 평가자가 자동 끝 기준을 확인한다. FAIL이면 고칠 잎을 만든다
-2. 실행 방법과 시나리오를 안내한다
-3. 사람이 써 보고 말로 답한다
-4. 답을 셋 중 하나로 나누고 한 줄로 되묻는다
-   - **괜찮다:** 그 커밋에 릴리즈 태그 `v*`를 달고 GitHub Release를 만든다(설명은 그 가지 잎들의 PR 제목). 큰 가지를 닫는다
-   - **고칠 게 있다:** 큰 가지 아래 새 잎을 만든다
-   - **원한 게 달랐다:** 명세를 바꾸는 안을 `needs-decision`으로 올린다
+1. The evaluator checks the automatic done criteria. On FAIL, create leaves to fix it
+2. Explain how to run it and walk through the scenario
+3. The human tries it and answers in their own words
+4. Sort the answer into one of three and confirm it in one line
+   - **It's fine:** put a release tag `v*` on that commit and create a GitHub Release (its description is the PR titles of that branch's leaves). Close the branch
+   - **Needs fixes:** create new leaves under the branch
+   - **Not what I wanted:** raise a proposal to change the spec as `needs-decision`
 
-첫 릴리즈는 `v1.0.0`이다. `v1.0.0` 전에는 태그 없이 닫는다: 확인이 "괜찮다"여도 태그와 GitHub Release 없이 큰 가지만 닫는다.
+The first release is `v1.0.0`. Before `v1.0.0`, close without a tag: even when the answer is "it's fine", close only the branch, with no tag and no GitHub Release.
 
-## PR TL;DR 형식
+## PR TL;DR format
 
 ```markdown
-Where: <뿌리> › <큰 가지> › #<번호>
-What: 한 것 (3줄 안)
+Where: <root> › <branch> › #<number>
+What: what was done (within 3 lines)
 Changed: new issues / plan changes / contract changes / risk paths touched / new dependencies / deleted tests
-Decided: 혼자 정한 것과 이유만
+Decided: only what you decided on your own, and why
 ```
 
-`Changed`는 `git diff`와 `gh`로 세서 채우고, `Decided`만 직접 쓴다.
+Fill `Changed` by counting with `git diff` and `gh`; write only `Decided` yourself.
 
-## 브랜치와 머지
+## Git branches and merging
 
-- dev가 트렁크다. 모든 일은 잎 브랜치 `leaf/<번호>-<짧은-이름>`에서 하고 PR로 dev에 합친다
-- 잎 PR은 squash로 머지한다. 잎 하나가 dev 커밋 하나다
-- dev에 직접 push하지 않는다. 머지는 CI 초록 + TL;DR + 사람의 동의일 때만 한다
-- 브랜치는 dev 하나다. "사람이 써 본 시점"은 태그로 남긴다: 릴리즈 `v*`(큰 가지 확인이 괜찮다인 커밋, 릴리즈 하나), 보관 `archive/*`
-- 태그 push는 자동 허용하지 않는다. 권한 창이 사람의 동의다
+- dev is the trunk. All work happens on a leaf branch `leaf/<number>-<short-name>` and is merged into dev through a PR
+- Leaf PRs are squash-merged. One leaf is one dev commit
+- Do not push directly to dev. Merge only with CI green + a TL;DR + the human's consent
+- dev is the only git branch. "When the human tried it" is marked with tags: release `v*` (the commit where trying a branch was "it's fine", one per release), archive `archive/*`
+- Tag pushes are never auto-allowed. The permission prompt is the human's consent
 
-## 커밋과 PR
+## Commits and PRs
 
-- PR 제목은 Conventional Commits로 쓴다: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` (예: `feat: 로그인 토큰 갱신`). squash 하면 이 제목이 dev 커밋 메시지가 된다
-- PR 본문에 `Closes #<잎 번호>`를 넣는다
-- 브랜치 안의 커밋 메시지는 자유다. 다른 사람의 작업을 이어받았으면 `Co-authored-by:`를 남긴다
+- Write PR titles in Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` (e.g. `feat: refresh login token`). When squashed, this title becomes the dev commit message
+- Put `Closes #<leaf number>` in the PR body
+- Commit messages inside the git branch are free-form. If you took over someone else's work, leave `Co-authored-by:`
 
-## 계약 테스트
+## Contract tests
 
-- 자식끼리의 약속은 `contracts/<노드번호>/`에 둔다. 쪼갤 때 먼저 쓰고, 처음엔 빨강이어야 한다
-- 잎은 약속을 넓힐 수만 있다. 기존 계약 테스트를 고치거나 지워야 하면 멈추고 사람에게 묻는다
-- 깨는 변경은 병렬 변경으로 한다: 옛 방식을 두고 새 방식을 추가 → 다 옮기기 → 옛 방식 지우기
+- Child contracts live in `contracts/<node number>/`. Write them first when splitting; they must be red at first
+- A leaf can only widen a contract. If an existing contract test has to be edited or deleted, stop and ask the human
+- Make breaking changes as a parallel change: keep the old way and add the new way → move everything over → delete the old way
 
-## 기록 형식
+## Record format
 
-기록은 이슈 댓글이고 첫 줄이 굵은 표시어로 시작한다. 본문은 한국어로 쓴다. 표시어마다 같은 이름의 라벨을 붙인다: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released`는 표시어만 있고 라벨은 없다. `needs-decision`만 상태 라벨이라 답이 달리면 없앤다.
+A record is an issue comment whose first line starts with a bold marker. Markers and label names stay exactly as written. Write the record body in the language your team uses. Each marker gets a label of the same name: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released` is a marker only, with no label. `needs-decision` is the only state label, so remove it once there is an answer.
 
 ```markdown
-**needs-decision** <물은 것> ① … ② … → **answer** <고른 것> (사람). 이유: …
-**split** 안 <번호>를 고름 (사람). <안마다 좋은 점/대가>. 자식 #…, 약속 contracts/<번호>/
-**contract-change** #<잎>이 <무엇을> <넓힘/병렬 변경 몇 단계>. PR #…
-**blocked** <무엇이 안 됐나>. 해본 것: … 다음엔: … (풀 일이 있으면) → #<새 이슈> (blocked-by)
-**off-recommendation** 추천은 #…이었고 #…을 골랐다. 이유: …
-**spec-gap** <무엇>. 찾은 곳: …
-**discovered** #<새 이슈> <무엇>. 찾은 곳: …
-**released** @<할당됐던 사람>. 이유: <3일 활동 없음 / PR 닫힘 / blocked>
+**needs-decision** <what was asked> ① … ② … → **answer** <what was picked> (the human). Reason: …
+**split** Picked option <number> (the human). <good/bad for each option>. Children #…, contracts contracts/<number>/
+**contract-change** #<leaf> <what> (<widened / parallel change step N>). PR #…
+**blocked** <what did not work>. Tried: … Next: … (if something has to be done to unblock it) → #<new issue> (blocked-by)
+**off-recommendation** Recommended #…; picked #…. Reason: …
+**spec-gap** <what>. Found in: …
+**discovered** #<new issue> <what>. Found in: …
+**released** @<previous assignee>. Reason: <no activity for 3 days / PR closed / blocked>
 ```
 
-## 끝내기 전에
+## Before you finish
 
-- 물은 것과 그 답 → 그 일의 이슈에 `**needs-decision**`
-- 바뀐 약속 → 부모 이슈에 `**contract-change**`
-- 하다가 찾은 새 일 → 새 이슈(`discovered` 라벨) + 그 일의 이슈에 `**discovered**`
-- 티켓과 부모 이슈에 없던 정보가 필요했으면 → `**spec-gap**`
-- 추천 밖의 것을 골랐으면 → `**off-recommendation**`
+- What you asked and the answer → `**needs-decision**` on the work's issue
+- Contract changes → `**contract-change**` on the parent issue
+- New work found along the way → a new issue (`discovered` label) + `**discovered**` on the work's issue
+- If you needed information that the ticket and the parent issue did not have → `**spec-gap**`
+- If something outside the recommendations was picked → `**off-recommendation**`
 
-## 막혔을 때
+## When blocked
 
-이어가지 않는다. 그 일의 이슈에 `**blocked**` 기록을 남기고 `blocked` 라벨을 붙인 뒤, 할당을 풀고 사람에게 알린다. 풀려면 따로 할 일이 있으면(라이브러리 교체, 다른 잎의 계약 수정 등) 그 일을 새 이슈로 만들고 막힌 잎에 blocked-by로 잇는다. 다음에는 새 세션에서 처음부터 한다.
+Do not continue. Leave a `**blocked**` record on the work's issue, add the `blocked` label, unassign, and tell the human. If something separate has to be done to unblock it (swapping a library, changing another leaf's contract, and so on), create that as a new issue and link it to the blocked leaf with blocked-by. Next time, start over in a new session.

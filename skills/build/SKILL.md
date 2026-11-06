@@ -4,37 +4,37 @@ description: "Implement one kagami leaf issue test-first, get the evaluator's ve
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/implement/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
-> 고친 점: `/code-review`를 평가자 에이전트 판정으로 바꾸고, AGENTS.md의 계획 알림·멈춤 조건·PR 형식에 맞췄다. 시작할 때 `leaf/<번호>-` 브랜치로 옮기는 단계를 넣었다. kagami 플러그인으로 옮기며 이름을 build로, 부르는 tdd를 test로 바꿨다.
+> Source: https://github.com/mattpocock/skills (MIT, Matt Pocock), commit `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/implement/SKILL.md`. Full license text: `THIRD_PARTY_NOTICES`.
+> Changes: replaced `/code-review` with the evaluator agent's verdict, and matched AGENTS.md's plan notice, stop conditions and PR format. Added a step that moves to a `leaf/<number>-` git branch at the start. When moving into the kagami plugin, renamed it to build and the tdd it calls to test.
 
-인자: 잎 이슈 번호. 사람이 준 잎 이슈를 구현한다. 규칙은 `AGENTS.md`가 기준이고, 여기는 구현 단계(AGENTS.md "한 번 일하는 순서" 6~9)를 한 자리에 모은 것이다.
+Argument: the leaf issue number. Implement the leaf issue the human gave you. `AGENTS.md` is the source of the rules; this skill gathers the implementation steps (AGENTS.md "One round of work" 6–9) in one place.
 
-## 시작
+## Start
 
-- 잎 이슈와 부모 이슈를 `gh issue view`로 읽고 잎 제목을 말한다. 번호가 애매하면 묻는다. 다른 PR은 뒤지지 않는다
-- 지금 브랜치가 `leaf/<번호>-`로 시작하지 않으면(앱이 만든 `claude/...` 등) `git fetch origin && git switch -c leaf/<번호>-<짧은-이름> origin/dev`로 옮긴다. 그래야 `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts"`가 `--issue` 없이 잎 번호를 읽는다
-- AGENTS.md "계획 알림 형식"(Where/Why/Scope/Done when/Decide)으로 계획을 보여 준다. `Decide`가 있을 때만 멈추고 답을 기다린다. 없으면 바로 진행한다
-- 테스트할 seam(test 스킬의 "Seams")을 `Scope`에 적는다. 계획 알림이 멈추지 않고 진행해도(Decide 없음) seam은 합의한 것으로 본다. test에서 다시 묻지 않는다
-- `Scope`가 3줄을 넘으면 시작하기 전에 쪼개자고 제안한다
-- 검사 명령은 대상 저장소 CLAUDE.md의 "Commands" 절에서 읽는다. 패키지 매니저나 명령 이름을 짐작하지 않는다. 절이 없거나 검사 명령이 비었으면 사람에게 묻고, 받은 명령을 이 잎에 쓰고 평가자에게도 넘긴다. 사람이 "이 저장소엔 검사 명령이 없다"고 분명히 답하면 그 답(원문)을 평가자에게 넘긴다. 이 질문과 답은 잎 이슈에 `**needs-decision**` → `**answer**`로 남긴다. CLAUDE.md는 위험 경로라 고치지 않고, Commands에 적자고 제안만 한다
+- Read the leaf issue and its parent issue with `gh issue view` and say the leaf's title. If the number is unclear, ask. Do not dig through other PRs
+- If the current git branch does not start with `leaf/<number>-` (for example a `claude/...` one the app made), move with `git fetch origin && git switch -c leaf/<number>-<short-name> origin/dev`. That way `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts"` reads the leaf number without `--issue`
+- Show the plan in AGENTS.md "Plan notice format" (Where/Why/Scope/Done when/Decide). Stop and wait for an answer only when there is a `Decide`. Otherwise keep going
+- Write the seams to test (the test skill's "Seams") in `Scope`. Even if the plan notice goes ahead without stopping (no Decide), the seams count as agreed. Do not ask again in test
+- If `Scope` is longer than 3 lines, propose splitting before you start
+- Read the check commands from the "Commands" section of the target repository's CLAUDE.md. Do not guess the package manager or command names. If the section is missing or has no check commands, ask the human, use the commands you get for this leaf, and pass them to the evaluator too. If the human clearly answers "this repository has no check commands", pass that answer (verbatim) to the evaluator. Record this question and answer on the leaf issue as `**needs-decision**` → `**answer**`. CLAUDE.md is a risk path, so do not edit it; only propose adding the commands to Commands
 
-## 구현
+## Build
 
-- 가능한 곳은 미리 합의한 seam에서 Skill 도구로 "kagami:test"를 부른다
-- Commands의 타입체크와 단일 테스트 파일은 자주 돌리고, 끝에 Commands의 전체 검사를 한 번 돌린다
-- 명세에 없는 애매한 부분은 그 자리에서 묻는다. 되돌리기 어려운 결정(AGENTS.md "사람에게 묻는 것")은 선택지로 묻고 기다린다. 나머지는 정하고 PR의 `Decided`에 남긴다
-- 잎 이슈의 범위 밖 파일이 필요해지거나 `git diff --stat origin/dev...HEAD`의 바뀐 줄 수가 커지면 멈추고 사람에게 알린다
+- Where you can, call "kagami:test" with the Skill tool at the seams agreed beforehand
+- Run the typecheck and single test files from Commands often, and run the full check from Commands once at the end
+- Ask about ambiguities the spec does not cover on the spot. Ask about hard-to-undo decisions (AGENTS.md "What to ask the human") with options and wait. Decide the rest and record it in the PR's `Decided`
+- If you need files outside the leaf issue's scope, or the changed line count in `git diff --stat origin/dev...HEAD` grows large, stop and tell the human
 
-## 평가
+## Evaluate
 
-- 슬라이스가 다 초록이면 리팩터링하고 Commands의 전체 검사를 다시 돌린다
-- 끝나면 평가자 에이전트(`kagami:evaluator`, 쓰기 권한 없음)에게 끝 기준, 범위, TL;DR 초안을 주고 판정받는다. Commands가 비어 사람에게 받은 검사 명령이나 "없다"는 답이 있으면 그것도 준다
-- FAIL이면 고치고 다시 판정받는다. 3번 FAIL이면 멈추고 사람에게 알린다(AGENTS.md "막혔을 때")
+- When every slice is green, refactor and run the full check from Commands again
+- When done, give the evaluator agent (`kagami:evaluator`, no write access) the done criteria, the scope and the draft TL;DR, and get its verdict. If Commands was empty and you got check commands or a "there are none" answer from the human, give that too
+- On FAIL, fix and get a verdict again. After 3 FAILs, stop and tell the human (AGENTS.md "When blocked")
 
-## 커밋과 PR
+## Commits and PRs
 
-- 작업을 현재 잎 브랜치에 커밋하고 push한다. dev에 직접 push하지 않는다
-- PR은 dev로 연다. 제목은 Conventional Commits(`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), 본문 맨 위에 AGENTS.md "PR TL;DR 형식"의 TL;DR, 그 아래 `Closes #<잎 번호>`
-- `Changed`는 `git diff`와 `gh`로 세서 채우고, `Decided`만 직접 쓴다
-- `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts"`가 내는 `plan changes (직접)`은 직접 채우는 칸이다. 이 PR 동안 잎·부모 이슈의 목표·범위·끝 기준이 바뀌었으면 무엇이 바뀌었는지(어느 이슈, 사람이 정했으면 그 `**answer**`), 아니면 `없음`으로 바꾼다. `(직접)`을 남기면 평가자가 FAIL로 잡는다
-- 머지는 이 스킬이 하지 않는다. CI가 초록이면 TL;DR을 보여 주고 사람의 동의를 기다린다(AGENTS.md 10~11)
+- Commit the work to the current leaf branch and push. Do not push to dev directly
+- Open the PR against dev. The title follows Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), the top of the body is the TL;DR in AGENTS.md "PR TL;DR format", and below it `Closes #<leaf number>`
+- Fill `Changed` by counting with `git diff` and `gh`; write only `Decided` yourself
+- The `plan changes (manual)` that `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts"` prints is a field you fill in yourself. If the goal, scope or done criteria of the leaf or parent issue changed during this PR, replace it with what changed (which issue, and the `**answer**` if the human decided it); otherwise replace it with `None`. If you leave `(manual)`, the evaluator catches it as a FAIL
+- This skill does not merge. When CI is green, show the TL;DR and wait for the human's consent (AGENTS.md 10–11)

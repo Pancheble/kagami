@@ -18,7 +18,7 @@ test("새 이슈: 하위 이슈와 **discovered** 기록의 번호를 겹치지 
 	);
 });
 
-test("Changed 줄: facts()가 센 것과 새 이슈를 TL;DR 칸 순서대로 적고, 없으면 없음", () => {
+test("Changed 줄: facts()가 센 것과 새 이슈를 TL;DR 칸 순서대로 적고, 없으면 None", () => {
 	const md = "# Risk paths\n\n- `src/guard.ts`\n- `hooks/`\n";
 	const f = facts(
 		[
@@ -33,10 +33,10 @@ test("Changed 줄: facts()가 센 것과 새 이슈를 TL;DR 칸 순서대로 �
 	);
 	assert.equal(
 		line(f, [41]),
-		"Changed: new issues #41 / plan changes (직접) / contract changes contracts/7/a.contract.ts / risk paths touched src/guard.ts, hooks/x.sh / new dependencies b / deleted tests src/old.test.ts",
+		"Changed: new issues #41 / plan changes (manual) / contract changes contracts/7/a.contract.ts / risk paths touched src/guard.ts, hooks/x.sh / new dependencies b / deleted tests src/old.test.ts",
 	);
 	assert.equal(
 		line(facts("A\tsrc/new.ts", { md, pkg: "{}" }, { md, pkg: "{}" }), []),
-		"Changed: new issues 없음 / plan changes (직접) / contract changes 없음 / risk paths touched 없음 / new dependencies 없음 / deleted tests 없음",
+		"Changed: new issues None / plan changes (manual) / contract changes None / risk paths touched None / new dependencies None / deleted tests None",
 	);
 });
