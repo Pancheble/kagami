@@ -5,66 +5,66 @@ license: MIT
 disable-model-invocation: true
 ---
 
-# 기획 대화
+# Planning conversation
 
-인자: `$1` 기획 문서 경로, `$2` 대상 저장소 owner/name.
+Arguments: `$1` the plan document path, `$2` the target repository owner/name.
 
-`docs/harness/가운데 설계.md`의 "칸이 빠진 뿌리 → 기획 대화"를 돈다. 고른 사람에게 뿌리를 할당하고 시작한다(`AGENTS.md` "할당"). 질문 몇 개로 끝내지 않는다. 며칠에서 몇 주가 걸려도 된다.
+Run "Root with empty fields → planning conversation" from `docs/design.md`. Assign the root to the person who picked it and start (`AGENTS.md` "Assigning"). Do not wrap it up after a few questions. It may take days or weeks.
 
-기획 문서가 원본이고, 뿌리 이슈는 거기서 뽑은 것이다. 고칠 땐 언제나 기획 문서부터 고친다.
+The plan document is the source, and the root issue is drawn from it. When changing anything, always change the plan document first.
 
-## 누가 무엇을 정하나
+## Who decides what
 
-- "무엇을"은 사람이 정한다: 성공 기준, 안 할 것, 위험 경로(대상 저장소 CLAUDE.md Risk paths에 더할 경로), 스택 선택. AI는 안과 득실을 내고 고르는 건 사람이다
-- AI가 사람 대신 칸을 채우지 않는다. 사람이 답하지 않은 칸은 비워 두고, 명세 점검이 빠졌다고 알리게 둔다
-- 내용이 맞는지는 여기서 판정하지 않는다. 그건 잎이 다 닫힌 큰 가지의 확인에서 사람이 써 보고 본다. 명세 점검은 칸이 있는지만 센다(위험 경로 칸은 "CLAUDE.md"가 있는지도)
+- The human decides the "what": success criteria, what is out of scope, risk paths (paths to add to Risk paths in the target repository's CLAUDE.md), the choice of stack. The AI offers options and their trade-offs; the human picks
+- The AI does not fill fields in for the human. Leave the fields the human has not answered empty, and let the spec check report them as missing
+- Whether the content is right is not judged here. The human checks that by trying it, when trying a branch with every leaf closed. The spec check only counts whether the fields exist (and for the risk paths field, whether it contains "CLAUDE.md")
 
-## 1. 말로 푼다
+## 1. Talk it through
 
-사람이 문서 형식 없이 무엇을 만들고 싶은지 말하게 둔다. 끊지 말고, 들은 걸 기획 문서($1, 없으면 사람에게 경로를 묻는다)에 의도 그대로 적는다.
+Let the human say what they want to build, with no document format. Do not interrupt, and write what you hear into the plan document ($1; if none, ask the human for a path), keeping the intent as it is.
 
-## 2. 셀프 그릴링 (최대 15라운드)
+## 2. Self-grilling (up to 15 rounds)
 
-한 라운드:
+One round:
 
-1. 지금 기획 문서에서 가장 애매하거나 위험한 곳 하나를 질문으로 쓴다
-2. 그 질문에 AI 자신의 답을 같이 쓴다 (근거: 기획 문서, 코드, 조사)
-3. 지금까지 정한 것끼리 모순되는지 본다. 모순이면 그걸 다음 질문으로
-4. 사람만 정할 수 있는 것(무엇을, 우선순위, 취향, 돈과 시간)이면 그때만 사람에게 묻는다. 물을 땐 선택지 2~3개, 득실, 추천 하나
+1. Write the single most ambiguous or risky spot in the current plan document as a question
+2. Write the AI's own answer to that question alongside it (grounds: the plan document, code, research)
+3. Check whether the things decided so far contradict each other. If they do, make that the next question
+4. Only when it is something only the human can decide (the what, priorities, taste, money and time), ask the human then. When asking, give 2–3 options, their trade-offs, and one recommendation
 
-판단이 서면 15라운드 전에 끝낸다. 라운드마다 질문, 자기 답, 사람 답(있으면)을 기획 문서에 남긴다.
+Finish before 15 rounds once you can judge. Each round, record the question, your own answer, and the human's answer (if any) in the plan document.
 
-## 3. 이미 있는 걸 찾는다
+## 3. Find what already exists
 
-공식 기능, 오픈소스, 연구를 훑는다. 대체할 수 있는 것은 기획에서 빼고 "이걸 쓴다"로 적는다. 빈자리만 만들 것으로 남긴다.
+Skim official features, open source and research. Take out of the plan what something existing can replace, and write it as "use this". Leave only the gaps as things to build.
 
-## 4. 기획 문서 하나에 반영한다
+## 4. Fold it into one plan document
 
-설계 문서가 아니라 의도를 다듬은 기록이다. 문서는 하나만 둔다. 용어가 생기면 기획 문서의 용어집에 모은다.
+It is not a design document but a record of refined intent. Keep only one document. When terms come up, collect them in the plan document's glossary.
 
-큰 가지 후보가 보이면 후보마다 `.github/ISSUE_TEMPLATE/branch.md`의 칸(목표, 끝 기준, 써 볼 시나리오 3~5단계)을 기획 문서에 적어 둔다. 뿌리 이슈에는 넣지 않는다. 뿌리를 큰 가지로 쪼갤 때 `/kagami:split`이 이 칸을 큰 가지 이슈로 옮긴다.
+When branch candidates show up, write each candidate's fields from `.github/ISSUE_TEMPLATE/branch.md` (Goal, Done when, a 3–5 step Try-it scenario) into the plan document. Do not put them in the root issue. When the root is split into branches, `/kagami:split` moves these fields into branch issues.
 
-## 5. 살이 붙으면 갈아엎는다
+## 5. When it gets bloated, start over
 
-덧붙이기만 해서 무거워지면, 기획만 남게 처음부터 다시 쓴다. 다시 쓴 뒤 사람에게 빠진 의도가 없는지 묻는다.
+If it grows heavy from only adding, rewrite it from scratch so only the plan remains. After rewriting, ask the human whether any intent went missing.
 
-## 6. 끝낼 때만 뿌리 이슈로 뽑는다
+## 6. Draw the root issue only at the end
 
-1. 기획 문서에서 `.github/ISSUE_TEMPLATE/root.md`의 칸을 뽑아 본문 파일로 쓴다 (스크래치 폴더나 기획 문서 옆)
-   - 기획 문서: 원본 링크나 경로
-   - 성공 기준: 한 줄에 하나, `- <기준> (확인: <방법>)`. 평가자가 돌려볼 수 있게 적는다("로그인이 잘 된다"가 아니라 "가입한 이메일로 로그인하면 대시보드가 뜬다")
-   - 위험 경로: "CLAUDE.md 참고"만 적는다. 정본은 대상 저장소 `CLAUDE.md`의 Risk paths 하나다. 사람이 정한 프로젝트별 경로는 거기에 백틱으로 더한다(기본값 `.github/workflows/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.env*`는 이미 있다). 뿌리에는 경로를 적지 않는다
-   - 평가자 준비물: 테스트 계정, 시드 데이터
-   - 스택과 ADR: 고른 것, 이유, 버린 대안
-   - 안 할 것
-   - 사람이 "없음"이라고 정한 칸은 "없음"으로 적는다. 정하지 않은 칸은 비운다
-2. 뿌리 이슈는 사람이 사람 계정으로 올린다(새 뿌리면 만들고, 고칠 땐 본문을 바꾼다). 명령을 보여 주고 사람이 돌린다:
-   `gh issue create -R <대상 저장소> --title "<뿌리 제목>" --body-file <본문 파일>`
-3. 명세 점검을 돌린다:
-   `node "${CLAUDE_PLUGIN_ROOT}/src/spec.ts" --repo <대상 저장소> --root <뿌리 번호>` (사람 gh 계정으로 돈다)
-4. 빠진 항목이 나오면 그 항목으로 2번(셀프 그릴링)부터 다시 돈다. 기획 문서를 고치고, 다시 뽑고, 다시 점검한다
-5. "다 있다"가 나오면 기획 대화를 닫는다. 다음 세션은 이 뿌리를 큰 가지로 쪼개기(`/kagami:split`)를 추천한다
+1. Draw the fields of `.github/ISSUE_TEMPLATE/root.md` from the plan document and write them to a body file (in a scratch folder or next to the plan document)
+   - Plan document: a link or path to the source
+   - Success criteria: one per line, `- <criterion> (check: <how>)`. Write them so the evaluator can run them ("logging in with a registered email shows the dashboard", not "login works")
+   - Risk paths: write only "See CLAUDE.md". The single source is Risk paths in the target repository's `CLAUDE.md`. Project paths the human chose are added there in backticks (the defaults `.github/workflows/`, `.claude/`, `AGENTS.md`, `CLAUDE.md`, `.env*` are already there). Do not write paths in the root
+   - Evaluator setup: test accounts, seed data
+   - Stack and ADRs: what was chosen, why, the alternatives dropped
+   - Out of scope
+   - Write "None" in a field the human decided is "None". Leave fields that were not decided empty
+2. The human posts the root issue from their own account (create it for a new root; edit the body when changing it). Show the command and let the human run it:
+   `gh issue create -R <target-repo> --title "<root title>" --body-file <body-file>`
+3. Run the spec check:
+   `node "${CLAUDE_PLUGIN_ROOT}/src/spec.ts" --repo <target-repo> --root <root-number>` (runs with the human's gh account)
+4. If it reports missing items, go around again from step 2 (self-grilling) with those items. Fix the plan document, draw it again, check it again
+5. When it reports nothing missing, close the planning conversation. The next session recommends splitting this root into branches (`/kagami:split`)
 
-## 큰 가지 확인에서 "원한 게 달랐다"가 나왔을 때
+## When trying a branch comes back "not what I wanted"
 
-뿌리에 남은 이유 댓글을 읽고, 그 이유로 2번부터 돈다. 기획 문서를 먼저 고치고 6번으로 뿌리 이슈 본문을 바꾼 뒤 명세 점검을 다시 돌린다.
+Read the reason comment left on the root, and go around from step 2 with that reason. Fix the plan document first, change the root issue body with step 6, then run the spec check again.

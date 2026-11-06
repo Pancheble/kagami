@@ -4,89 +4,89 @@ description: "Try a finished group of work yourself. If it's good, close it; if 
 license: MIT
 ---
 
-AGENTS.md "한 번 일하는 순서" 5의 확인이다. 규칙은 AGENTS.md가 기준이고 여기에 다시 쓰지 않는다. 볼 절: "큰 가지 확인", "할당", "기록 형식", "브랜치와 머지"의 태그.
+This is trying a branch, from step 5 of AGENTS.md "One round of work". AGENTS.md is the source of the rules and they are not repeated here. Sections to read: "Trying a branch", "Assigning", "Record format", and the tags in "Git branches and merging".
 
-인자: `$1` 큰 가지 번호, `$2` 대상 저장소(없으면 지금 저장소). 아래에서 `R`은 대상 저장소, `B`는 큰 가지다.
+Arguments: `$1` the branch number, `$2` the target repository (the current repository if omitted). Below, `R` is the target repository and `B` is the branch.
 
-## 0. 시작
+## 0. Start
 
-- 아래 git 명령은 지금 저장소의 origin을 쓴다. `gh repo view --json nameWithOwner --jq .nameWithOwner`가 R이 아니면 멈추고, R을 클론한 곳에서 다시 부르라고 알린다
+- The git commands below use the current repository's origin. If `gh repo view --json nameWithOwner --jq .nameWithOwner` is not R, stop and say to call this again from a clone of R
 
-- 뿌리를 찾는다: `gh api repos/R/issues/B/parent --jq .number`가 뿌리이고, 뿌리의 parent는 404여야 한다(B가 뿌리 바로 아래 노드). 아니면 멈추고 알린다
-- `node ${CLAUDE_PLUGIN_ROOT}/src/tree.ts --repo R --root <뿌리>`로 트리를 읽고 B 아래 잎이 다 닫혔는지 본다. 열린 잎이 있으면 멈추고 알린다
-- B가 할당되지 않았으면 AGENTS.md "할당"대로 고른 사람을 할당한다
-- B 본문의 "끝 기준"과 "써 볼 시나리오"를 읽는다. 둘 중 하나가 없으면 멈추고 알린다
-- 확인할 커밋을 정한다: `git fetch origin && git rev-parse origin/dev`. 아래에서 `C`다. 확인하는 동안 dev가 움직여도 C를 본다
+- Find the root: `gh api repos/R/issues/B/parent --jq .number` is the root, and the root's parent must be 404 (B is a node right under the root). Otherwise stop and say so
+- Read the tree with `node ${CLAUDE_PLUGIN_ROOT}/src/tree.ts --repo R --root <root>` and check that every leaf under B is closed. If any leaf is open, stop and say so
+- If B is not assigned, assign the person who picked it, as in AGENTS.md "Assigning"
+- Read "Done when" and "Try-it scenario" in B's body. If either is missing, stop and say so
+- Pin the commit to try: `git fetch origin && git rev-parse origin/dev`. Below, this is `C`. Even if dev moves during the try, look at C
 
-## 1. 평가자 확인
+## 1. Evaluator check
 
-평가자 에이전트 `kagami:evaluator`에게 큰 가지 확인이라고 말하고 B 번호, 끝 기준, 커밋 C를 준다. 잎 diff가 아니니 범위와 TL;DR 칸은 보지 말고 끝 기준만 판정하라고 한다.
+Tell the evaluator agent `kagami:evaluator` that this is trying a branch, and give it B's number, the done criteria and commit C. It is not a leaf diff, so tell it not to look at the scope and TL;DR fields and to judge only the done criteria.
 
-- PASS면 2로 간다
-- FAIL이면 걸린 끝 기준마다 고칠 잎을 만들고(아래 "새 잎") 여기서 끝낸다. B는 열어 둔다
+- On PASS, go to 2
+- On FAIL, make a leaf to fix each failed done criterion (see "New leaf" below) and end here. Leave B open
 
-## 2. 실행 방법과 시나리오 안내
+## 2. How to run, and the scenario
 
-사람이 직접 따라 할 수 있게 적는다. 사람 대신 시나리오를 돌리지 않는다.
+Write it so the human can follow it themselves. Do not run the scenario for the human.
 
-- 실행 방법: 커밋 C를 받는 법(브랜치·worktree), 설치와 실행 명령. 대상 저장소 CLAUDE.md "Commands"에서 가져온다
-- 시나리오: B 본문의 단계를 번호대로 옮긴다. 단계마다 무엇을 보면 되는지 한 줄씩 붙인다
-- 시나리오에 추천(`/kagami:next`)을 보는 단계가 있으면, 확인 중에는 B 확인이 추천 1번이라고 덧붙인다. B가 닫힌 뒤를 가정해 다음 일을 1번으로 적었으면 "확인 중에는 B가 1번, 다음이 …"로 바꿔 읽는다(#50 spec-gap)
+- How to run: how to get commit C (git branch or worktree), and the install and run commands. Take them from the target repository's CLAUDE.md "Commands"
+- Scenario: copy the steps from B's body in order. Add one line per step on what to look at
+- If the scenario has a step that looks at the recommendations (`/kagami:next`), add that during the try, trying B is recommendation 1. If the scenario assumes B is already closed and lists the next work as 1, read it as "during the try B is 1, next is …" (#50 spec-gap)
 
-## 3. 사람의 답
+## 3. The human's answer
 
-사람이 써 보고 말로 답할 때까지 기다린다. 묻는 말을 덧붙여 답을 이끌지 않는다.
+Wait until the human has tried it and answers in their own words. Do not add questions that lead the answer.
 
-## 4. 셋으로 나누고 되묻기
+## 4. Sort into three and confirm
 
-답을 셋 중 하나로 나누고 한 줄로 되묻는다. 예: "고칠 게 있다로 들었어요: 목록이 날짜순이 아니다. 맞나요?" 사람이 맞다고 할 때까지 5로 가지 않는다.
+Sort the answer into one of three and confirm it in one line. Example: "I heard needs fixes: the list is not sorted by date. Is that right?" Do not go to 5 until the human says it is right.
 
-- **괜찮다:** 시나리오대로 되고 원한 것이다
-- **고칠 게 있다:** 원한 것은 맞는데 어딘가 틀리거나 모자라다
-- **원한 게 달랐다:** 명세(끝 기준·시나리오·뿌리) 자체가 원한 것이 아니다
+- **It's fine:** it works as the scenario says and it is what the human wanted
+- **Needs fixes:** it is what the human wanted, but something is wrong or missing
+- **Not what I wanted:** the spec itself (done criteria, scenario, root) is not what the human wanted
 
-답에 둘이 섞였으면 항목마다 나눠 되묻는다.
+If the answer mixes two, split it per item and confirm each.
 
-## 5. 결과
+## 5. Result
 
-### 괜찮다
+### It's fine
 
-1. version을 정한다: 지금 저장소에 `.claude-plugin/plugin.json`이 있으면 그 `version`이다. 없으면 사람에게 묻는다. 물을 때 `git tag -l 'v*' --sort=-v:refname | head -3`을 보여 주고, 기본 답은 "1.0.0 전(태그 없음)"이다
-2. 잎 PR 제목을 모은다: 트리에서 B 아래 닫힌 잎마다 `gh issue view <잎> -R R --json closedByPullRequestsReferences`로 PR 번호를 얻고, 겹친 PR은 하나만 남긴다. PR마다 `gh pr view <PR> -R R --json title,mergedAt`을 부르고, 머지되지 않은 PR은 뺀 뒤 mergedAt 순서로 늘어놓는다
-3. `node ${CLAUDE_PLUGIN_ROOT}/src/try.ts <version> <제목>...`을 부른다. 출력은 `{tag?, notes}` JSON이다
-4. tag가 없으면(1.0.0 전) 태그와 Release 없이 5로 간다
-5. tag가 있으면:
-   - `git ls-remote --tags origin <tag>`에 이미 있으면 멈춘다. 버전을 올리는 잎을 새로 만들자고 제안한다
-   - `git tag <tag> C && git push origin <tag>`. 태그 push는 권한 창이 사람의 동의다. 거절되면 로컬 태그를 지우고 멈춘다
-   - notes를 파일에 쓰고 `gh release create <tag> -R R --verify-tag --title <tag> --notes-file <파일>`
-6. B에 확인 기록을 달고 `gh issue close B -R R`로 닫는다
+1. Decide the version: if the current repository has `.claude-plugin/plugin.json`, it is its `version`. Otherwise ask the human. When you ask, show `git tag -l 'v*' --sort=-v:refname | head -3`, and the default answer is "before 1.0.0 (no tag)"
+2. Collect the leaf PR titles: for each closed leaf under B in the tree, get the PR numbers with `gh issue view <leaf> -R R --json closedByPullRequestsReferences`, and keep only one of any duplicate PR. Call `gh pr view <PR> -R R --json title,mergedAt` for each PR, drop PRs that were not merged, and order them by mergedAt
+3. Call `node ${CLAUDE_PLUGIN_ROOT}/src/try.ts <version> <title>...`. The output is `{tag?, notes}` JSON
+4. If there is no tag (before 1.0.0), go to 5 without a tag or Release
+5. If there is a tag:
+   - If `git ls-remote --tags origin <tag>` already has it, stop. Propose making a new leaf that bumps the version
+   - `git tag <tag> C && git push origin <tag>`. For the tag push, the permission prompt is the human's consent. If it is refused, delete the local tag and stop
+   - Write notes to a file and run `gh release create <tag> -R R --verify-tag --title <tag> --notes-file <file>`
+6. Add the trying-a-branch record to B and close it with `gh issue close B -R R`
 
 ```markdown
-**큰 가지 확인** 괜찮다 (사람). <v1.0.0 전이라 태그와 Release 없이 닫는다 | 태그 <tag>, Release <링크>>
-- 1. 평가자: 끝 기준 <몇> 줄 PASS (dev <C 앞 7자>)
-- 시나리오 1: <사람이 본 것>
+**trying a branch** it's fine (the human). <closing without a tag or Release since this is before v1.0.0 | tag <tag>, Release <link>>
+- 1. Evaluator: <n> lines of done criteria PASS (dev <first 7 chars of C>)
+- Scenario 1: <what the human saw>
 - …
 ```
 
-### 고칠 게 있다
+### Needs fixes
 
-- 고칠 것마다 B 아래 새 잎을 만든다(아래 "새 잎"). B는 열어 둔다
-- B에 `**큰 가지 확인** 고칠 게 있다 (사람). <사람의 답>. → #<새 잎>...`을 단다
+- For each thing to fix, make a new leaf under B (see "New leaf" below). Leave B open
+- Add `**trying a branch** needs fixes (the human). <the human's answer>. → #<new leaf>...` to B
 
-### 원한 게 달랐다
+### Not what I wanted
 
-- 명세를 바꾸는 안 2~3개를 좋은 점/대가와 함께 내고 추천 하나를 고른다. 뿌리를 고쳐야 하면 그 안에 `/kagami:plan`을 적는다
-- B에 `**needs-decision**` 기록(AGENTS.md 형식)을 달고 `needs-decision` 라벨을 붙인다. B는 열어 둔다
-- 사람이 그 자리에서 답하면 `**answer**`를 이어 쓰고 라벨을 없앤다
+- Offer 2–3 options for changing the spec, with good/bad for each, and pick one to recommend. If the root has to change, write `/kagami:plan` in that option
+- Add a `**needs-decision**` record (AGENTS.md format) to B and put the `needs-decision` label on it. Leave B open
+- If the human answers on the spot, follow up with `**answer**` and remove the label
 
-## 새 잎
+## New leaf
 
-`/kagami:split`의 잎 형식(목표, 지킬 약속, 끝 기준, 범위)으로 만든다. 끝 기준에는 걸린 끝 기준이나 사람이 본 증상을 다시 확인하는 테스트를 적는다.
+Make it in `/kagami:split`'s leaf format (Goal, Contracts to keep, Done when, Scope). In Done when, write a test that checks the failed done criterion, or the symptom the human saw, again.
 
 ```bash
-gh issue create -R R --title "<잎 제목>" --label leaf --body-file <본문>
-id=$(gh api repos/R/issues/<잎> --jq .id)
+gh issue create -R R --title "<leaf title>" --label leaf --body-file <body>
+id=$(gh api repos/R/issues/<leaf> --jq .id)
 gh api repos/R/issues/B/sub_issues -X POST -F sub_issue_id=$id
 ```
 
-잎은 만들고 끝낸다. 구현은 다음 세션에서 `/kagami:next`가 추천한다.
+Make the leaves and stop there. In the next session, `/kagami:next` recommends implementing them.

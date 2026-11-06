@@ -4,88 +4,88 @@ description: "Break a large issue into small ones that each fit in one session. 
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/to-tickets/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
-> 고친 점: 계획·대화가 아니라 노드 이슈 하나를 쪼갠다. 안을 하나 내고 고쳐 가는 대신 안 2~3개를 득실과 함께 내고 사람이 고른다. 잎 템플릿을 AGENTS.md의 목표·지킬 약속·끝 기준·범위로 바꾸고, 범위에 파일 경로를 적는다(원문은 경로를 피한다). `contracts/<노드>/`의 빨간 계약 테스트를 PR로 먼저 넣고, 머지된 뒤에 잎 이슈를 만든다. 브랜치를 `leaf/<노드>-split`으로 옮기고, 머지에 `--subject`를 붙인다. kagami 플러그인으로 옮기며 이름을 split으로 바꾸고, 칸이 다 있고 자식이 없는 뿌리를 큰 가지로 쪼개는 길을 더했다. `/setup-matt-pocock-skills`, 로컬 파일 방식, `ready-for-agent` 라벨은 뺐다. 수직 조각과 넓은 리팩터의 병렬 변경은 원문을 따른다.
+> Source: https://github.com/mattpocock/skills (MIT, Matt Pocock), commit `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/to-tickets/SKILL.md`. Full license text: `THIRD_PARTY_NOTICES`.
+> Changes: splits one node issue, not a plan or a conversation. Instead of offering one proposal and refining it, offers 2–3 options with good/bad for each, and the human picks. The leaf template becomes AGENTS.md's goal, contracts to keep, done criteria and scope, and the scope lists file paths (the original avoids paths). The red contract tests in `contracts/<node>/` go in first as a PR, and the leaf issues are created after it is merged. The git branch moves to `leaf/<node>-split`, and the merge gets `--subject`. Moved into the kagami plugin and renamed to split, with an added path that splits a root with every field filled and no children into branches. `/setup-matt-pocock-skills`, the local-file mode and the `ready-for-agent` label were removed. Vertical slices and parallel change for wide refactors follow the original.
 
-AGENTS.md "한 번 일하는 순서" 5의 쪼개기다. 규칙은 AGENTS.md가 기준이고 여기에 다시 쓰지 않는다. 볼 절: "쪼개기", "잎 크기", "계약 테스트", "기록 형식"의 `**split**`, "할당".
+This is the split in step 5 of AGENTS.md "One round of work". AGENTS.md is the source of the rules, and they are not repeated here. Sections to read: "Splitting", "Leaf size", "Contract tests", `**split**` in "Record format", "Assigning".
 
-인자: `$1` 노드나 뿌리 번호, `$2` 대상 저장소(없으면 지금 저장소). 아래에서 `R`은 대상 저장소다.
+Arguments: `$1` the node or root number, `$2` the target repository (if none, the current repository). Below, `R` is the target repository.
 
-## 1. 읽기
+## 1. Read
 
-- 노드 이슈와 부모 이슈만 `gh issue view`로 읽는다(본문과 댓글). 다른 PR은 뒤지지 않는다
-- 자식이 이미 있으면(`gh api repos/R/issues/<노드>/sub_issues`) 멈추고 알린다. 이 스킬은 자식 없는 노드와 뿌리만 쪼갠다
-- 노드가 이미 잎 조건(AGENTS.md "쪼개기")을 만족하면 "그대로 잎"이라고 말하고, 사람이 동의하면 `node` 라벨을 `leaf`로 바꾸고 끝낸다
-- 노드의 목표가 닿는 코드를 읽는다. 쉽게 바꿀 수 있게 먼저 손볼 곳(prefactor)이 보이면 그걸 첫 잎으로 둔다
+- Read only the node issue and its parent issue with `gh issue view` (body and comments). Do not dig through other PRs
+- If it already has children (`gh api repos/R/issues/<node>/sub_issues`), stop and say so. This skill splits only nodes and roots with no children
+- If the node already meets the leaf conditions (AGENTS.md "Splitting"), say it "stays a leaf", and if the human agrees, change the `node` label to `leaf` and finish
+- Read the code the node's goal touches. If you see a place to tidy first so the change is easy (prefactor), make that the first leaf
 
-## 2. 안 내기
+## 2. Offer options
 
-쪼개는 안 2~3개를 내고 추천 하나를 고른다. 안마다:
+Offer 2–3 ways to split and pick one to recommend. For each option:
 
-- 잎 목록: 제목, 맡는 목표 한 줄, 범위(파일·폴더), 기다리는 잎(blocked-by)
-- 자식끼리의 약속: 잎들이 서로 기대는 인터페이스(함수 이름, 인자, 반환, 데이터 모양)
-- 좋은 점 / 대가
+- Leaf list: title, one line of the goal it covers, scope (files and folders), the leaves it waits on (blocked-by)
+- Child contracts: the interfaces the leaves rely on from each other (function names, arguments, return values, data shapes)
+- Good / bad
 
-안을 짜는 법(원문):
+How to build the options (from the original):
 
-- 잎은 수직 조각이다. 한 층만 하는 가로 조각이 아니라, 좁아도 끝까지 이어진 길 하나를 만든다. 끝난 잎은 혼자서 확인할 수 있다
-- 잎끼리 범위가 겹치지 않게 한다. 기다림은 진짜로 막는 것만 단다
-- 넓은 리팩터(한 번 바꾸면 많은 호출처가 같이 깨지는 기계적 변경)는 수직으로 자르지 않고 병렬 변경으로 잇는다: 새 방식 추가 → 호출처를 묶음별로 옮기는 잎들(추가에 blocked-by) → 옛 방식 지우기(옮기는 잎 모두에 blocked-by)
+- A leaf is a vertical slice. Not a horizontal slice that does one layer, but one path that runs all the way through, however narrow. A finished leaf can be checked on its own
+- Keep leaf scopes from overlapping. Add blocked-by only for what really blocks
+- A wide refactor (a mechanical change where one change breaks many call sites at once) is not cut vertically but chained as a parallel change: add the new way → leaves that move the call sites batch by batch (blocked-by the add) → remove the old way (blocked-by every move leaf)
 
-사람이 고를 때까지 기다린다. 고친 안을 원하면 고쳐서 다시 낸다.
+Wait until the human picks. If they want an option changed, change it and offer it again.
 
-## 3. 계약을 먼저 dev에
+## 3. Contracts to dev first
 
-고른 안의 약속을 대상 저장소의 dev 위 브랜치 `leaf/<노드>-split`에 쓴다. 지금 브랜치가 그것이 아니면(앱이 만든 `claude/...` 등) `git fetch origin && git switch -c leaf/<노드>-split origin/dev`로 옮긴다.
+Write the picked option's contracts on the git branch `leaf/<node>-split` off dev in the target repository. If the current git branch is not that one (a `claude/...` one made by the app, etc.), move to it with `git fetch origin && git switch -c leaf/<node>-split origin/dev`.
 
-1. 약속마다 스텁: 모양만 있고 몸통은 `throw new Error("not implemented")`. 저장소의 언어와 폴더 구조를 따른다
-2. `contracts/<노드>/`에 테스트: 약속마다 `이름.contract.<확장자>`, 노드 목표를 확인하는 인수 테스트 `이름.accept.<확장자>`. 파일 이름에 `.test.`를 넣지 않는다(기본 테스트가 빨강을 집어 CI가 깨진다)
-3. 처음엔 빨강인지 파일마다 `node --test <파일>`로 본다. 테스트 하나하나가 스텁의 "not implemented"로 실패해야 한다. 불러오기 실패, 문법 에러, 테스트 없음, 통과가 하나라도 있으면 고친다. "던진다"를 확인하는 테스트는 스텁도 던지니 통과한다. 에러 종류나 메시지까지 확인한다
-4. PR을 dev로 연다. 제목 `test: #<노드> <노드 이름> 계약`, 본문 맨 위 TL;DR(AGENTS.md "PR TL;DR 형식", Changed는 대상 저장소 체크아웃에서 `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts" --issue <노드>`), 빨강 확인 결과, `Refs #<노드>`. 노드는 닫지 않으니 `Closes`를 쓰지 않는다
-5. CI가 초록이면 사람에게 머지 동의를 받고 `gh pr merge --squash --subject "<PR 제목> (#<PR 번호>)"`로 머지한다. `--subject`가 없으면 squash 메시지가 브랜치 커밋 메시지로 나올 수 있다
+1. A stub for each contract: only the shape, with the body `throw new Error("not implemented")`. Follow the repository's language and folder structure
+2. Tests in `contracts/<node>/`: `name.contract.<ext>` for each contract, and an acceptance test `name.accept.<ext>` that checks the node's goal. Do not put `.test.` in the file names (the default test run would pick up the red tests and break CI)
+3. Check that each file starts red with `node --test <file>`. Every single test must fail with the stub's "not implemented". If there is even one import failure, syntax error, missing test or pass, fix it. A test that checks "it throws" passes, because the stub throws too. Check the error type or message as well
+4. Open a PR against dev. Title `test: #<node> <node name> contracts`, the TL;DR at the very top of the body (AGENTS.md "PR TL;DR format"; for Changed, run `node "${CLAUDE_PLUGIN_ROOT}/src/changed.ts" --issue <node>` in the target repository checkout), the red check results, `Refs #<node>`. The node is not closed, so do not use `Closes`
+5. When CI is green, get the human's consent to merge and merge with `gh pr merge --squash --subject "<PR title> (#<PR number>)"`. Without `--subject`, the squash message can come out as the git branch's commit messages
 
-잎 이슈는 이 PR이 머지된 뒤에 만든다. 준비된 잎은 바로 구현할 수 있어야 하므로, 계약이 dev에 없는 잎을 트리에 두지 않는다.
+Create the leaf issues after this PR is merged. A ready leaf must be buildable right away, so do not put a leaf in the tree whose contracts are not on dev.
 
-## 4. 잎 이슈와 기다림
+## 4. Leaf issues and blocked-by
 
-기다림이 없는 잎부터 차례로 만든다. 본문:
+Create them in order, starting with the leaves that wait on nothing. Body:
 
 ```markdown
-## 목표
-부모 목표 중 이 잎이 맡는 것
+## Goal
+The part of the parent's goal this leaf covers
 
-## 지킬 약속
-이 잎이 깨면 안 되는 약속. contracts/<노드>/의 어느 파일인지
+## Contracts to keep
+The contracts this leaf must not break. Which file in contracts/<node>/
 
-## 끝 기준
-`node --test contracts/<노드>/<파일>` 가 초록 (+ 잎 자신의 테스트)
+## Done when
+`node --test contracts/<node>/<file>` is green (+ the leaf's own tests)
 
-## 범위
-- 건드릴 파일·폴더
+## Scope
+- Files and folders to touch
 ```
 
 ```bash
-gh issue create -R R --title "<잎 제목>" --label leaf --body-file <본문>
-id=$(gh api repos/R/issues/<잎> --jq .id)
-gh api repos/R/issues/<노드>/sub_issues -X POST -F sub_issue_id=$id
-# 기다리는 잎마다 (막는 쪽의 id)
-gh api repos/R/issues/<잎>/dependencies/blocked_by -X POST -F issue_id=$(gh api repos/R/issues/<막는 잎> --jq .id)
+gh issue create -R R --title "<leaf title>" --label leaf --body-file <body>
+id=$(gh api repos/R/issues/<leaf> --jq .id)
+gh api repos/R/issues/<node>/sub_issues -X POST -F sub_issue_id=$id
+# for each leaf it waits on (the id of the blocking one)
+gh api repos/R/issues/<leaf>/dependencies/blocked_by -X POST -F issue_id=$(gh api repos/R/issues/<blocking-leaf> --jq .id)
 ```
 
-라벨이 없으면 손으로 만들지 말고 `node "${CLAUDE_PLUGIN_ROOT}/src/tree.ts" --repo R --labels`로 kagami와 같은 세트를 만든다. 다 만들고 `node "${CLAUDE_PLUGIN_ROOT}/src/tree.ts" --repo R --root <뿌리>`로 자식과 기다림이 걸렸는지 본다.
+If the labels are missing, do not create them by hand; create the same set as kagami with `node "${CLAUDE_PLUGIN_ROOT}/src/tree.ts" --repo R --labels`. When everything is created, check with `node "${CLAUDE_PLUGIN_ROOT}/src/tree.ts" --repo R --root <root>` that the children and blocked-by links are in place.
 
-## 5. 기록하고 끝내기
+## 5. Record and finish
 
-- 노드 이슈에 `**split**` 기록(AGENTS.md 형식: 고른 안, 안마다 좋은 점/대가, 자식 번호, `contracts/<노드>/`)을 달고 `split` 라벨을 붙인다. 계약 PR 링크도 적는다
-- 노드 할당을 푼다. 노드는 자식이 다 닫힐 때까지 열려 있다. 노드 본문은 고치지 않는다
-- AGENTS.md "끝내기 전에"를 하고 "클리어해도 돼요"라고 알린다. 자식 잎은 다음 세션에서 한다
+- On the node issue, add a `**split**` record (AGENTS.md format: the picked option, good/bad for each option, the child numbers, `contracts/<node>/`) and add the `split` label. Include the contract PR link too
+- Unassign the node. The node stays open until all its children are closed. Do not edit the node body
+- Do AGENTS.md "Before you finish" and say "You can clear the session now." The child leaves are done in the next session
 
-## 뿌리를 쪼갤 때
+## When splitting a root
 
-칸이 다 있고(`node "${CLAUDE_PLUGIN_ROOT}/src/spec.ts" --repo R --root <뿌리>`가 "다 있다") 자식이 없는 뿌리는 큰 가지로 쪼갠다. 위 순서를 따르되 이것만 다르다.
+A root with every field filled (when `node "${CLAUDE_PLUGIN_ROOT}/src/spec.ts" --repo R --root <root>` reports nothing missing) and no children is split into branches. Follow the steps above; only these differ.
 
-- 1: 뿌리의 기획 문서도 읽는다. `/kagami:plan`이 적어 둔 큰 가지 후보(목표, 끝 기준, 써 볼 시나리오)가 안의 재료다
-- 2: 잎 대신 큰 가지 목록을 낸다. 큰 가지마다 제목, 목표, 끝 기준, 써 볼 시나리오 3~5단계, 기다리는 큰 가지
-- 3은 건너뛴다. 계약은 큰 가지를 잎으로 쪼갤 때 `contracts/<큰 가지>/`에 쓴다
-- 4: 큰 가지 이슈는 `.github/ISSUE_TEMPLATE/branch.md`의 칸으로 쓰고 `--label node`로 만들어 뿌리의 하위 이슈로 단다. 써 볼 시나리오에서 추천 순서를 말할 때는 "확인 중에는 그 큰 가지가 추천 1번, 다음이 …"로 쓴다
-- 5: `**split**` 기록과 할당 풀기는 뿌리에 한다. 뿌리는 큰 가지가 다 닫힐 때까지 열려 있다
+- 1: Also read the root's plan document. The branch candidates `/kagami:plan` wrote down (goal, done criteria, try-it scenario) are the material for the options
+- 2: Offer a list of branches instead of leaves. For each branch: title, goal, done criteria, a 3–5 step try-it scenario, the branches it waits on
+- Skip 3. Contracts are written in `contracts/<branch>/` when the branch is split into leaves
+- 4: Write the branch issues with the fields of `.github/ISSUE_TEMPLATE/branch.md`, create them with `--label node`, and attach them to the root as sub-issues. When the try-it scenario gives the recommendation order, write "while trying, this branch is recommendation 1, then …"
+- 5: The `**split**` record and unassigning are done on the root. The root stays open until all its branches are closed

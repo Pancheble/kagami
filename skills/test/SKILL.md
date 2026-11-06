@@ -4,14 +4,14 @@ description: "Test-first loop (red → green → refactor) that /kagami:build ru
 license: MIT
 ---
 
-> 출처: https://github.com/mattpocock/skills (MIT, Matt Pocock), 커밋 `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`. 라이선스 전문: `THIRD_PARTY_NOTICES`.
-> 고친 점: 없는 스킬(`codebase-design`, `code-review`) 의존과 GLOSSARY.md를 빼고, ADR은 뿌리 이슈의 "스택과 ADR", 리팩터링은 평가자 판정 전으로 옮겼다. kagami 플러그인으로 옮기며 이름을 test로 바꿨다. 나머지는 원문 그대로다.
+> Source: https://github.com/mattpocock/skills (MIT, Matt Pocock), commit `4ae2317ddb22b046e26455e4f9c9b3aaaf62212d`, `skills/engineering/tdd/SKILL.md`. Full license text: `THIRD_PARTY_NOTICES`.
+> Changes: removed the dependencies on skills that do not exist here (`codebase-design`, `code-review`) and GLOSSARY.md, moved ADRs to the root issue's "Stack and ADRs", and moved refactoring to before the evaluator verdict. When moving into the kagami plugin, renamed it to test. The rest is as in the original.
 
 # Test-Driven Development
 
 TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle: consult them before and during the loop, not after.
 
-When exploring the codebase, respect the ADRs listed under "스택과 ADR" in the root issue. Tests here use `node:test` and `node:assert` (`src/**/*.test.ts`); the examples in tests.md use jest-style `expect` for illustration only.
+When exploring the codebase, respect the ADRs listed under "Stack and ADRs" in the root issue. Tests here use `node:test` and `node:assert` (`src/**/*.test.ts`); the examples in tests.md use jest-style `expect` for illustration only.
 
 ## What a good test is
 
