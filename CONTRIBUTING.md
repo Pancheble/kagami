@@ -37,7 +37,7 @@ CC does not make decisions that are hard to undo on its own; it raises them to t
 
 ## What we don't do
 
-- Do not push directly to dev. dev is the only git branch, and the points where the human tried the work are marked with tags: release `v*`, archive `archive/*`.
+- Do not push directly to dev. dev is the only git branch, and the points where the human tried the work are marked with release tags `v*`, the only kind of tag.
 - Do not do two leaves in one session.
 - Do not quietly edit contract tests (`contracts/`). If you changed one, it must be in the TL;DR's `Changed`, and CI flags it separately.
 

@@ -57,12 +57,12 @@ One warning came with it: beware of using something just because it exists.
 
 ## Where the originals are
 
-The original documents were removed from `dev`. They are only in tags:
+The original documents were removed from `dev`. They are still in `dev`'s history, at these commits:
 
-- [`archive/stage0-autonomy`](https://github.com/Pancheble/kagami/tree/archive/stage0-autonomy/docs/harness): the last commit that still had the autonomous code (leaf, session, split, replan, close, promote and others), before it was removed from `dev` in #31. Under `docs/harness/` it holds the first version of the current design doc, and under `docs/harness/archive/` the three stage 0 documents:
+- [`f85459b`](https://github.com/Pancheble/kagami/tree/f85459b9f11b6b145d8109bd8158e8818529ba79/docs/harness) (formerly the `stage0-autonomy` git branch): the last commit that still had the autonomous code (leaf, session, split, replan, close, promote and others), before it was removed from `dev` in #31. Under `docs/harness/` it holds the first version of the current design doc, and in its `archive` folder the three stage 0 documents:
   - the overall harness flow (the 8 steps, guards, trunk and leaf picking, replanning)
   - the block list (every mechanism with the step it served and when it switches on)
   - the stage 0 plan (the spec check, the ticket table T0–T12 with every decision made along the way, and the plan for stages 1 and 2)
-- [`archive/t0`](https://github.com/Pancheble/kagami/tree/archive/t0): the end of T0, where `main` used to point. It has earlier versions of the three documents, directly under `docs/harness/`; the stage 0 plan there predates the decisions made in T1 to T12.
+- [`dade1d8`](https://github.com/Pancheble/kagami/tree/dade1d86b03990dc437d5a68c5067e03b7580fda): the end of T0, where `main` used to point. It has earlier versions of the three documents, directly under `docs/harness/`; the stage 0 plan there predates the decisions made in T1 to T12.
 
 All of them are in Korean.
