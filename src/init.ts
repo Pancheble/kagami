@@ -85,7 +85,7 @@ export function plan(
 }
 
 // dir의 빈 새 저장소(.git 말고 아무것도 없고 커밋 없음)에 깐다. 아니면 아무것도 하지 않고 거부한다
-// 파일 쓰기, 라벨, HEAD를 dev로 두고 첫 커밋까지. push와 저장소 비밀은 사람이 한다(skills/init/SKILL.md). 대상 저장소 이름을 낸다
+// 라벨, 파일 쓰기, HEAD를 dev로 두고 첫 커밋까지. push와 저장소 비밀은 사람이 한다(skills/init/SKILL.md). 대상 저장소 이름을 낸다
 export async function install(
 	dir: string,
 	{ root, ref }: { root: string; ref?: string },
@@ -113,12 +113,13 @@ export async function install(
 			dir,
 		)
 	).trim();
+	// 라벨을 먼저: 권한이 없어 실패해도 폴더는 빈 채로 남아 다시 돌릴 수 있다(--force라 두 번 만들어도 된다)
+	await ensureLabels(target, run);
 	const p = plan(root, { repo: KAGAMI, ref });
 	for (const [f, body] of Object.entries(p.files)) {
 		mkdirSync(dirname(join(dir, f)), { recursive: true });
 		writeFileSync(join(dir, f), body);
 	}
-	await ensureLabels(target, run);
 	await run("git", ["symbolic-ref", "HEAD", `refs/heads/${p.branch}`], dir);
 	await run("git", ["add", "-A"], dir);
 	await run("git", ["commit", "-q", "-m", "chore: kagami init"], dir);
