@@ -4,13 +4,14 @@
 //     계약 정리: PR에 contract-change 라벨이 있고 본문 TL;DR의 Changed 줄에 그 계약 파일(*.contract.*)이 적혀 있으면 막지 않고 표시한다
 //   래칫: dev에서 초록이던 계약·인수 테스트가 HEAD에서 빨강이거나 사라졌으면 FAIL
 //   사실 계산: 위험 경로(dev의 CLAUDE.md 목록), 지운 테스트, 새 의존성을 센다
+//   위험 경로 정본: PR 쪽 CLAUDE.md에 Risk paths 절이 없으면 막는다
 //   보안 계산 검사: 바뀐 코드를 Biome security 규칙으로 본다
 // 계약 정리·위험 경로·지운 테스트·보안 지적은 초록에 표시(경고)로 사람에게 보인다. GitHub에 쓰지 않는다(읽기 토큰)
 // 실행: node src/guard.ts --dir <PR 체크아웃>  (origin/dev가 있어야 한다. 막힘이면 종료 코드 1)
 //   라벨과 본문은 GITHUB_EVENT_PATH의 pull_request payload에서 읽는다. 로컬에선 같은 모양의 JSON 파일을 그 변수로 준다
 import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, matchesGlob, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { noKey, quiet, type Run, sh } from "./run.ts";
@@ -114,13 +115,19 @@ export async function results(
 }
 
 // CLAUDE.md "Risk paths" 절에서 백틱으로 적은 경로만 읽는다. 말로 적은 줄(main을 옮기는 스크립트 등)은 계산하지 못한다
+const section = (md: string) =>
+	md.split(/^#+ /m).find((s) => s.startsWith("Risk paths"));
 export function riskPaths(md: string): string[] {
-	const sec = md.split(/^#+ /m).find((s) => s.startsWith("Risk paths"));
+	const sec = section(md);
 	return sec ? [...sec.matchAll(/`([^`]+)`/g)].map((m) => m[1]) : [];
 }
-// ponytail: 앞부분 일치만. 글롭이 필요하면 path.matchesGlob
+// 끝이 /면 그 폴더 아래, *가 있으면 글롭(*는 /를 넘지 않는다), 나머지는 이름이 똑같을 때
 const under = (f: string, p: string) =>
-	p.endsWith("/") ? f.startsWith(p) : f === p;
+	p.endsWith("/")
+		? f.startsWith(p)
+		: p.includes("*")
+			? matchesGlob(f, p)
+			: f === p;
 const deps = (pkg: string): string[] => {
 	try {
 		const j = JSON.parse(pkg);
@@ -280,16 +287,17 @@ export async function judge(wt: string, run: Run, pr?: Pr) {
 		["diff", "--name-status", "--no-renames", "origin/dev", "HEAD"],
 		wt,
 	);
+	const head = {
+		md: await show("HEAD", "CLAUDE.md"),
+		pkg: await show("HEAD", "package.json"),
+	};
 	const f = facts(
 		status,
 		{
 			md: await show("origin/dev", "CLAUDE.md"),
 			pkg: await show("origin/dev", "package.json"),
 		},
-		{
-			md: await show("HEAD", "CLAUDE.md"),
-			pkg: await show("HEAD", "package.json"),
-		},
+		head,
 	);
 	const changed = status
 		.split("\n")
@@ -301,7 +309,12 @@ export async function judge(wt: string, run: Run, pr?: Pr) {
 	const r = bad.length ? { broken: [], kept: 0 } : await ratchet(wt, run, tidy);
 	const sec = await security(changed, wt, run);
 	let fail: Failed | undefined;
-	if (bad.length)
+	// 위험 경로 정본은 CLAUDE.md의 Risk paths 하나다(뿌리 #49 정한 것 6). PR 쪽에서 못 찾으면 막는다
+	if (section(head.md) === undefined)
+		fail = {
+			why: "CLAUDE.md에 Risk paths 절이 없다 (위험 경로 정본. `# Risk paths` 제목 아래 백틱으로 경로를 적는다)",
+		};
+	else if (bad.length)
 		fail = {
 			why: `기존 계약·인수 테스트를 고쳤다: ${bad.join(", ")}`,
 		};
