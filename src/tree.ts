@@ -19,6 +19,8 @@ export type Tree = {
 	title: string;
 	state: State;
 	kind: "node" | "leaf";
+	labels: string[];
+	body: string;
 	assignees: string[];
 	blockedBy: { number: number; state: State }[];
 	scope: string[]; // 잎의 "범위" 칸 경로들. 노드는 []
@@ -145,6 +147,8 @@ export async function readTree(
 		title: i.title,
 		state: lower(i.state),
 		kind: labels.includes("leaf") ? "leaf" : "node",
+		labels,
+		body: i.body,
 		assignees: i.assignees.nodes.map((a) => a.login),
 		blockedBy: i.blockedBy.nodes.map((b) => ({
 			number: b.number,

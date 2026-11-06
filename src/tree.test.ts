@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import type { Issue } from "./next.ts";
 import type { Run } from "./run.ts";
 import { ensureLabels, readTree } from "./tree.ts";
 
@@ -33,7 +34,7 @@ const issues: Record<number, object> = {
 		title: "잎 A",
 		body: "## 목표\n\n무엇\n\n## 범위\n\n<!-- 주석 -->\n- `src/a.ts`\n- src/b/\n\n## 기다릴 티켓\n\n- #4\n",
 		state: "OPEN",
-		labels: { nodes: [{ name: "leaf" }] },
+		labels: { nodes: [{ name: "leaf" }, { name: "blocked" }] },
 		assignees: { nodes: [{ login: "bot" }] },
 		subIssues: { nodes: [] },
 		blockedBy: {
@@ -78,14 +79,17 @@ function fake() {
 	return { calls, run };
 }
 
-test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", async () => {
+test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다. 라벨과 본문도 읽는다", async () => {
 	const { calls, run } = fake();
 	const tree = await readTree("o/r", 1, run);
+	const _asIssue: Issue = tree; // next.ts ready()에 그대로 넘긴다
 	assert.deepEqual(tree, {
 		number: 1,
 		title: "뿌리",
 		state: "open",
 		kind: "node",
+		labels: ["node"],
+		body: "",
 		assignees: [],
 		blockedBy: [],
 		scope: [],
@@ -96,6 +100,8 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				title: "가지",
 				state: "open",
 				kind: "node",
+				labels: ["node"],
+				body: "",
 				assignees: [],
 				blockedBy: [],
 				scope: [],
@@ -106,6 +112,8 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 						title: "잎 B",
 						state: "closed",
 						kind: "leaf",
+						labels: ["leaf"],
+						body: "",
 						assignees: [],
 						blockedBy: [],
 						scope: [],
@@ -119,6 +127,8 @@ test("뿌리에서 하위 이슈와 blocked-by를 따라 트리를 읽는다", a
 				title: "잎 A",
 				state: "open",
 				kind: "leaf",
+				labels: ["leaf", "blocked"],
+				body: "## 목표\n\n무엇\n\n## 범위\n\n<!-- 주석 -->\n- `src/a.ts`\n- src/b/\n\n## 기다릴 티켓\n\n- #4\n",
 				assignees: ["bot"],
 				blockedBy: [
 					{ number: 4, state: "open" },
