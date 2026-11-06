@@ -4,7 +4,7 @@
 
 ## 그대로 두는 것
 
-- 기록 표시어와 라벨 이름: `**needs-decision**`, `**answer**`, `**split**`, `**contract-change**`, `**blocked**`, `**off-recommendation**`, `**spec-gap**`, `**discovered**`, `**released**`, `**not-what-i-wanted**`, 라벨 `node`, `leaf`
+- 기록 표시어와 라벨 이름: `**needs-decision**`, `**answer**`, `**split**`, `**contract-change**`, `**blocked**`, `**off-recommendation**`, `**spec-gap**`, `**discovered**`, `**released**`, 라벨 `node`, `leaf`
 - 명령·경로·브랜치 이름: `/kagami:*`, `kagami:evaluator`, `leaf/<n>-<name>`, `dev`, `v*`, `archive/*`, `contracts/<n>/`
 - 출처 줄의 원문 경로와 URL(mattpocock/skills, cwc-long-running-agents)
 
@@ -66,7 +66,7 @@
 | 위험 경로 | risk paths |
 | 기록 · 표시어 | record · marker |
 | 사람 | the human |
-| 첫 실전 1회차 "전부 수락" · 2회차 "가운데" | accept-all run · normal run |
+| 첫 실전 1회차 "전부 수락" · 2회차 "가운데" | accept-all run · normal run (`docs/history/`·ADR에서만 쓴다. 제품 본문에는 없다: `product.contract.ts`) |
 | 괜찮다 / 고칠 게 있다 / 원한 게 달랐다 | it's fine / needs fixes / not what I wanted |
 | 막혔을 때 | when blocked |
 | "클리어해도 돼요" | "You can clear the session now." |

@@ -43,7 +43,6 @@ test("AGENTS.md 기록 형식: 표시어는 그대로, 기록 본문은 팀이 �
 		"spec-gap",
 		"discovered",
 		"released",
-		"not-what-i-wanted",
 	])
 		assert.ok(md.includes(`**${m}**`), m);
 	assert.match(md, /the language your team uses/i);
