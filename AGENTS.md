@@ -125,7 +125,7 @@ Fill `Changed` by counting with `git diff` and `gh`; write only `Decided` yourse
 
 ## Record format
 
-A record is an issue comment whose first line starts with a bold marker. Markers and label names stay exactly as written. Write the record body in the language your team uses. Each marker gets a label of the same name: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released` is a marker only, with no label. `needs-decision` is the only state label, so remove it once there is an answer.
+A record is an issue comment whose first line starts with a bold marker. Markers and label names stay exactly as written. Write the record body in the language your team uses. Each marker gets a label of the same name: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released` and `trying a branch` are markers only, with no label. `needs-decision` is the only state label, so remove it once there is an answer.
 
 ```markdown
 **needs-decision** <what was asked> ① … ② … → **answer** <what was picked> (the human). Reason: …
@@ -136,6 +136,7 @@ A record is an issue comment whose first line starts with a bold marker. Markers
 **spec-gap** <what>. Found in: …
 **discovered** #<new issue> <what>. Found in: …
 **released** @<previous assignee>. Reason: <no activity for 3 days / PR closed / blocked>
+**trying a branch** <it's fine / needs fixes> (the human). <tag and Release, or none before v1.0.0 / the human's answer. → #<new leaf>...>
 ```
 
 ## Before you finish
