@@ -1,0 +1,41 @@
+# kagami guard on kagami's own PRs (#131). The same judge target repos run through ci/guard.yml: edited contracts, ratchet, risk paths → red, green or a flag.
+# The guard code comes from dev, not from the PR, so a PR cannot edit src/guard.ts to make itself green. No secrets: the default token reads this repo, nothing is written.
+# Caveat: pull_request runs the PR side's copy of this file, so a PR that edits this file changes the check too. The human reads its diff before merging
+# (.github/workflows/ is a risk path, so the guard flags it).
+#
+# Passing a PR that changes a contract on purpose:
+#   - Widening or fixing a contract test (*.contract.*): add the contract-change label and name the file on the TL;DR's Changed: line
+#     (e.g. "Changed: contract changes contracts/52/self-guard.contract.ts"). The guard shows a flag (green) instead of red (src/guard.ts allowed).
+#     Adding the label or editing the body reruns this check (labeled, edited).
+#   - Editing an acceptance test (*.accept.*) has no such way. It stays red and the human passes it by agreeing to merge.
+#     That is why this check is not a required check in the ruleset.
+name: kagami guard
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+          fetch-depth: 0 # judge compares with origin/dev. HEAD is the merge commit of the PR on top of dev
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: kagami
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+        working-directory: kagami
+      - run: node kagami/src/guard.ts --dir repo
