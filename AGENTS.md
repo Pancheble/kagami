@@ -2,6 +2,12 @@
 
 Every agent working in this repository reads this document first. The human holds the flow; the agent finishes the one piece of work that was picked, leaves records, and ends. This workflow is written for Claude Code.
 
+## Language
+
+- Talk to the human in the language they write in, even though this document and the skills are in English. This covers everything the human reads: recommendations, the plan notice, questions and options, the PR TL;DR, and what you say at the end
+- If the human has not written anything yet (a session that opens with a slash command such as `/kagami:next`), use the language the tree's issues and records are written in
+- Keep names that code reads or people search for exactly as written: record markers, label names, issue field names (`## Goal` and so on), the field names of the plan notice and the PR TL;DR (`Where:`, `Changed:` and so on), commands and paths. Write what goes in them in the human's language
+
 ## Reading the tree
 
 - The tree lives only in GitHub issues. Root › branch › node › leaf are linked as sub-issues, and waiting is linked with blocked-by
