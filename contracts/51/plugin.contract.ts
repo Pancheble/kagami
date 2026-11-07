@@ -13,7 +13,8 @@ test("plugin and marketplace are named kagami, and the repo root is the plugin",
 	assert.equal(c.plugin, "kagami");
 	assert.equal(c.marketplace, "kagami");
 	assert.equal(c.source, "./");
-	assert.match(c.version, /^\d+\.\d+\.\d+$/);
+	// SemVer; a pre-release tail is allowed for the beta (1.0.0-beta.1, widened in #52)
+	assert.match(c.version, /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
 });
 
 test("four moved skills: only the human calls plan; the model can call split, build and test", () => {
