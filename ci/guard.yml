@@ -7,7 +7,6 @@
 # How to install: /kagami:init (src/init.ts) writes this file to the target repo as .github/workflows/kagami-guard.yml.
 #   It then changes the repository and ref lines of the kagami checkout below to the kagami ref the target repo pins (the same one as .claude/settings.json).
 #   The dev ref written here is the value for copying by hand (there are no tags before v1.0.0). In the target repo, .github/workflows/ is a risk path too
-# For the human: repo secret KAGAMI_READ_TOKEN = a fine-grained token with Contents: Read on Pancheble/kagami only (while kagami is private, before #52)
 name: kagami guard
 
 on:
@@ -32,7 +31,6 @@ jobs:
           repository: Pancheble/kagami
           ref: dev
           path: kagami
-          token: ${{ secrets.KAGAMI_READ_TOKEN }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:

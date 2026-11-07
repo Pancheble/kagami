@@ -34,7 +34,6 @@ node "${CLAUDE_PLUGIN_ROOT}/src/init.ts" --ref <ref>
 Show the steps below and let the human run them. Do not run them yourself.
 
 1. `git push -u origin dev`: the only push that goes straight to dev. It is the first git branch pushed, so dev becomes the default git branch. After this, changes reach dev only through leaf PRs
-2. `gh secret set KAGAMI_READ_TOKEN -R <target-repo>`: the read token the guard uses to fetch kagami while kagami is private (a fine-grained token with Contents: Read on Pancheble/kagami only). The human enters the token value. Do not ask for it or take it
-3. Open a new session in this folder and answer that you trust it, and the kagami marketplace and plugin in `.claude/settings.json`. Claude Code registers a marketplace that a repository's settings declare for the first time in the background after the session starts, so this first session has no `/kagami:*` yet. Open another session, or run `/reload-plugins` in this one. Then run `/kagami:next`; with no root yet, it tells you to set up the first one with `/kagami:plan`. A teammate's first session after cloning is the same
+2. Open a new session in this folder and answer that you trust it, and the kagami marketplace and plugin in `.claude/settings.json`. Claude Code registers a marketplace that a repository's settings declare for the first time in the background after the session starts, so this first session has no `/kagami:*` yet. Open another session, or run `/reload-plugins` in this one. Then run `/kagami:next`; with no root yet, it tells you to set up the first one with `/kagami:plan`. A teammate's first session after cloning is the same
 
 When it is done, show the list of installed files, the number of labels, the git branch, and the ref all at once.
