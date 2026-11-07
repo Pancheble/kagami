@@ -142,7 +142,7 @@ A record is an issue comment whose first line starts with a bold marker. Markers
 
 - What you asked and the answer → `**needs-decision**` on the work's issue
 - Contract changes → `**contract-change**` on the parent issue
-- New work found along the way → a new issue (`discovered` label) + `**discovered**` on the work's issue
+- New work found along the way → a new issue (`discovered` label) + `**discovered**` on the work's issue. Link the new issue as a sub-issue of the branch it belongs to: by default the parent of the work's issue (the root itself if the work is the root); if it fits no branch, under the root. Label it `leaf` if it meets the leaf conditions in "Splitting", otherwise `node`. Never leave it without a parent: `/kagami:next` does not see parentless issues
 - If you needed information that the ticket and the parent issue did not have → `**spec-gap**`
 - If something outside the recommendations was picked → `**off-recommendation**`
 
