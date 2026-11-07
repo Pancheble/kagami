@@ -175,7 +175,7 @@ Almost nothing here is new. Proven methods are woven into the tree and the human
 
 ## Shape of the records
 
-Every record is an issue comment whose first line starts with a bold marker in English. Write the body in the language your team uses. Each marker gets a label of the same name so you can filter by them on GitHub: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released` is a marker only, with no label. `needs-decision` is the only status label: when a session opens, Claude Code reads the comments on issues with this label; if there is an answer, it confirms it with the human in one line, leaves `**answer**`, and removes the label. If there is no answer, it asks again. So answers are cleaned up the same way whether they were given in a session or on GitHub. "Ready" is computed from the tree, so it is not a label.
+Every record is an issue comment whose first line starts with a bold marker in English. Write the body in the language your team uses. Each marker gets a label of the same name so you can filter by them on GitHub: `needs-decision`, `split`, `contract-change`, `blocked`, `off-recommendation`, `spec-gap`, `discovered`. `released` and `trying a branch` are markers only, with no label. `needs-decision` is the only status label: when a session opens, Claude Code reads the comments on issues with this label; if there is an answer, it confirms it with the human in one line, leaves `**answer**`, and removes the label. If there is no answer, it asks again. So answers are cleaned up the same way whether they were given in a session or on GitHub. "Ready" is computed from the tree, so it is not a label.
 
 | Marker | What | Where | Example |
 |---|---|---|---|
@@ -187,6 +187,7 @@ Every record is an issue comment whose first line starts with a bold marker in E
 | `spec-gap` | Something the ticket did not have | The work's issue | **spec-gap** Session expiry time. Found in a comment on parent #12. Put it in the leaves at the next split |
 | `discovered` | Newly found work | New issue (under the right parent) + a comment on the work's issue | **discovered** #55 password reset email. Found in: login failure screen |
 | `released` (no label) | Why the work was unassigned | The work's issue | **released** @baekchan. Reason: no activity for 3 days |
+| `trying a branch` (no label) | The human's answer after trying a branch | Branch issue | **trying a branch** needs fixes (the human). "The list doesn't refresh after saving". → #61 |
 
 ## Still open
 
