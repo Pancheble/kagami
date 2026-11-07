@@ -4,7 +4,7 @@ description: "At the start of a session, recommend 2–3 things to work on next 
 license: MIT
 ---
 
-This is AGENTS.md "When you open a session" and steps 1–5 of "One round of work". AGENTS.md is the source of the rules, and they are not repeated here. Sections to read: "Reading the tree", "When you open a session", "Assigning", "Record format".
+This is AGENTS.md "When you open a session" and steps 1–5 of "One round of work". AGENTS.md is the source of the rules, and they are not repeated here. Sections to read: "Language" (this skill often gives a session's first answer, after only a slash command), "Reading the tree", "When you open a session", "Assigning", "Record format".
 
 Arguments: `$1` the target repository (if none, the current repository). It is `R` below.
 
