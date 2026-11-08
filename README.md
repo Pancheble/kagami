@@ -18,10 +18,6 @@
   <b>English</b> · <a href="README.ko.md">한국어</a>
 </p>
 
-<!-- Demo (30–60 s): /kagami:next recommends → you pick → build writes tests first → evaluator PASS → PR
-<p align="center"><img src="docs/assets/demo.gif" alt="kagami demo" width="720"></p>
--->
-
 ## Why kagami
 
 Coding agents change too much at once, you can't tell what they did, and the next session has forgotten everything.

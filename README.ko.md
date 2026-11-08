@@ -18,10 +18,6 @@
   <a href="README.md">English</a> · <b>한국어</b>
 </p>
 
-<!-- 데모 (30~60초): /kagami:next 추천 → 고르기 → build가 테스트 먼저 → 평가자 PASS → PR
-<p align="center"><img src="docs/assets/demo.gif" alt="kagami 데모" width="720"></p>
--->
-
 ## 왜 kagami인가
 
 코딩 에이전트는 한 번에 너무 많이 바꾸고, 무엇을 했는지 알기 어렵고, 다음 세션은 맥락을 다 잃어요.
