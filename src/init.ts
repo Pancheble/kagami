@@ -89,7 +89,7 @@ export function plan(
 }
 
 // Installs into the empty new repo in dir (nothing but .git, no commits). Otherwise does nothing and refuses
-// Labels, writing files, pointing HEAD at dev, up to the first commit. The human does the push and the repo secret (skills/init/SKILL.md). Returns the target repo name
+// Labels, writing files, pointing HEAD at dev, up to the first commit. The human does the push (skills/init/SKILL.md). Returns the target repo name
 export async function install(
 	dir: string,
 	{ root, ref }: { root: string; ref?: string },
