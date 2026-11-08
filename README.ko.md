@@ -48,7 +48,7 @@ kagami는 이렇게 나눠요.
 | [Marcus](https://github.com/painted-porch/marcus) | 공유 칸반 보드 | 만들 것을 설명하면 Marcus가 나눔 | 보드에서 작업을 잡는 여러 에이전트 | 나누기 전에 만드는 영역 사이 인터페이스 계약(타입·API 모양) |
 | **kagami** | GitHub 이슈 트리 | 할 차례가 된 노드만. AI가 안 2~3개를 내고 사람이 고름 | 사람과 그 사람의 Claude Code 세션. 한 세션에 잎 하나 | 나눌 때 `contracts/<노드 번호>/`에 쓰는 실행되는 테스트. 한 번 초록이 된 계약이 빨개지면 CI 가드가 막음 |
 
-계약을 먼저 세우고 나누는 방법은 이미 알려져 있어요. kagami는 [Marcus의 contract-first decomposition](https://github.com/painted-porch/marcus/blob/main/docs/source/concepts/contract-first-decomposition.md)과 [James Phoenix의 글](https://understandingdata.com/posts/contracts-parallelize-agents/)에서 이 방법을 빌려 왔어요. 다른 빌려 온 방법(ADR/MADR, 트렁크 기반 개발, parallel change 등)은 [방법론 지도](docs/design.md#methodology-map)에 있어요.
+계약을 먼저 세우고 나누는 방법은 이미 알려져 있어요. kagami는 [Marcus의 contract-first decomposition](https://github.com/painted-porch/marcus/blob/main/docs/source/concepts/contract-first-decomposition.md)과 [James Phoenix의 글](https://understandingdata.com/posts/contracts-parallelize-agents/)에서 이 방법을 빌려 왔어요. 이 방법과 다른 빌려 온 방법(ADR/MADR, 트렁크 기반 개발, parallel change 등)은 [방법론 지도](docs/design.md#methodology-map)에 있어요.
 
 <sub>2026-11-08에 각 도구의 공식 README와 문서로 확인했어요: [CCPM README](https://github.com/automazeio/ccpm#readme), [Spec Kit README](https://github.com/github/spec-kit#readme)와 [템플릿](https://github.com/github/spec-kit/tree/main/templates), [BMad Method README](https://github.com/bmad-code-org/BMAD-METHOD#readme)와 [Choose a Planning Path](https://docs.bmad-method.org/plan/choose-a-planning-path/), [OpenSpec README](https://github.com/Fission-AI/OpenSpec#readme), [Claude Code 에이전트 팀 문서](https://code.claude.com/docs/en/agent-teams), [Marcus README](https://github.com/painted-porch/marcus#readme). 틀린 곳이 있으면 Issues로 알려 주세요.</sub>
 
