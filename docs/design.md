@@ -170,6 +170,7 @@ Almost nothing here is new. Proven methods are woven into the tree and the human
 | [Beads](https://www.morphllm.com/beads-agent-memory) | Pull only what can be done now from the dependency graph | Next-work recommendations, `discovered` |
 | DORA, trunk-based development, feature flags | Keep git branches short, hide unfinished features, merge daily | One `dev` trunk, tags mark when the human tried it |
 | [Not Rocket Science Rule](https://graphite.com/blog/bors-google-tap-merge-queue) | Only let in what was tested on top of the latest trunk | Merge only when CI is green |
+| Contract-first decomposition ([Marcus](https://github.com/painted-porch/marcus/blob/main/docs/source/concepts/contract-first-decomposition.md), [James Phoenix](https://understandingdata.com/posts/contracts-parallelize-agents/)) | Set the contracts between pieces before splitting, so pieces built apart still fit | Splitting writes the child contracts in `contracts/<node number>/` first |
 | Contract tests, parallel change (expand–contract) | Keep the old way, add the new way beside it, move everything, then delete the old | Changing contracts, ratchet |
 | TDD red first | Confirm with a failure first that the test really checks something | Red at first |
 

@@ -20,15 +20,37 @@
 
 ## Why kagami
 
-Coding agents change too much at once, you can't tell what they did, and the next session has forgotten everything.
+Just telling the AI "do it" is fast at first. Then you open the code to fix something, and neither you nor the AI knows why it ended up this way. So the fix takes forever.
 
-kagami keeps the work small and on the record:
+Alone, your decisions vanish with the chat. On a team, the work gets split loosely, nobody knows what the others are building, and the code collides where the pieces meet. Either way, it comes down to how the work was split.
 
-- **A tree of GitHub issues.** Goal › branch › node › leaf. The plan and every decision live in issues, so the next session (or a teammate) picks up where you left off
-- **One session, one piece.** Claude recommends 2–3 pieces that are ready now. You pick one; it finishes that leaf and stops
-- **Tests first.** Each leaf is built red → green → refactor against its done criteria
-- **A separate evaluator.** An agent with no write access checks the done criteria and scope before the PR
-- **You merge.** Hard-to-undo choices come to you as options. You read a short TL;DR and merge
+This is how kagami splits it:
+
+- **The work becomes a tree.** The AI proposes ways to split it, and you pick one. Only what is up next gets split
+- **The promises between pieces come first, as tests.** When work is split, the tests that run are written first, so pieces built apart still fit, and CI tells you when they collide
+- **Who is doing what, and why it was decided, stays in the issue.** It stays at that spot in the tree, so the next session or a teammate can pick it up
+
+It is slower than "just do it." In exchange, the fix later doesn't take forever. It is not a tool for letting the AI run alone for longer.
+
+**Evidence:** we are building the same project twice, once by handing everything to the AI and once the kagami way. We will fill in the results here when they are in (still checking).
+
+### How it differs from similar tools
+
+Similar tools split work too. The goal is different. The tools below split work to run several AI agents together, or to turn a spec into tasks; kagami splits it so that you hold the flow and several people can work together.
+
+| | Where the work lives | When it is split | Who takes a piece | Promises between pieces |
+|---|---|---|---|---|
+| [CCPM](https://github.com/automazeio/ccpm) | GitHub issues and `.claude/epics/` files | PRD → epic → tasks, one epic at a time | Agents running in parallel | `depends_on` and `conflicts_with` in task files, each agent scoped to its own files |
+| [Spec Kit](https://github.com/github/spec-kit) | `specs/<feature>/tasks.md` in the repo | Spec → plan → tasks, one feature at a time | An agent; `[P]` tasks can run in parallel | `contracts/` interface docs from the plan step, and contract-test tasks |
+| [BMad Method](https://github.com/bmad-code-org/BMAD-METHOD) | Planning docs in the repo and the epic's `tickets.toml` | An epic is sliced into stories up front; the rest are re-sliced when problems show | An agent, one story at a time; epics with clear boundaries in parallel | Architecture doc and shared contracts, integration checks at each epic boundary |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | `openspec/changes/<change>/tasks.md` in the repo | Per change: proposal → specs → design → tasks | An agent (`/opsx:apply`) | Not verified |
+| [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams) (experimental) | Local task list in `~/.claude/tasks/` | By the lead agent, as it goes | Teammate agents that claim tasks themselves | Dependencies between tasks, a different set of files for each teammate |
+| [Marcus](https://github.com/painted-porch/marcus) | A shared kanban board | Marcus splits what you describe | Several agents that pull tasks from the board | Interface contracts between domains (types, API shapes), made before splitting |
+| **kagami** | A tree of GitHub issues | Only the node that is up next; the AI proposes 2–3 ways, you pick | You and your Claude Code session, one leaf per session | Tests that run, written in `contracts/<node number>/` when splitting; the CI guard blocks a contract that was green and turned red |
+
+Setting contracts before splitting is a known method. kagami borrowed it from [Marcus's contract-first decomposition](https://github.com/painted-porch/marcus/blob/main/docs/source/concepts/contract-first-decomposition.md) and [a post by James Phoenix](https://understandingdata.com/posts/contracts-parallelize-agents/). The other borrowed methods (ADR/MADR, trunk-based development, parallel change and more) are in the [methodology map](docs/design.md#methodology-map).
+
+<sub>Checked against each tool's official README and docs on 2026-11-08: [CCPM README](https://github.com/automazeio/ccpm#readme), [Spec Kit README](https://github.com/github/spec-kit#readme) and [templates](https://github.com/github/spec-kit/tree/main/templates), [BMad Method README](https://github.com/bmad-code-org/BMAD-METHOD#readme) and [Choose a Planning Path](https://docs.bmad-method.org/plan/choose-a-planning-path/), [OpenSpec README](https://github.com/Fission-AI/OpenSpec#readme), [Claude Code agent teams docs](https://code.claude.com/docs/en/agent-teams), [Marcus README](https://github.com/painted-porch/marcus#readme). If something is wrong, tell us in Issues.</sub>
 
 > [!NOTE]
 > kagami is in **beta** (`v1.0.0-beta.1`). Things will break. Tell us what you hit in [Issues](https://github.com/Pancheble/kagami/issues).

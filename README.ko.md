@@ -20,15 +20,37 @@
 
 ## 왜 kagami인가
 
-코딩 에이전트는 한 번에 너무 많이 바꾸고, 무엇을 했는지 알기 어렵고, 다음 세션은 맥락을 다 잃어요.
+AI한테 "해줘"만 하면 처음엔 빨라요. 그런데 나중에 고치려고 열어 보면, 왜 이렇게 됐는지 나도 AI도 몰라요. 그래서 고치는 데 한세월 걸려요.
 
-kagami는 일을 작게 나누고 기록으로 남겨요.
+혼자일 때는 결정이 대화와 함께 사라져요. 팀일 때는 일을 대충 나눠서 서로 뭘 만드는지 모르고, 맞물리는 곳에서 코드가 부딪혀요. 결국 둘 다 "일을 어떻게 나눴냐"의 문제예요.
 
-- **GitHub 이슈 트리.** 목표 › 가지 › 노드 › 잎. 계획과 결정이 전부 이슈에 남아서 다음 세션(이나 팀원)이 이어받아요
-- **한 세션에 한 조각.** 지금 할 수 있는 일 2~3개를 추천받고, 하나를 고르면 그 잎 하나만 끝내고 멈춰요
-- **테스트 먼저.** 잎마다 끝 기준을 놓고 빨강 → 초록 → 정리 순서로 만들어요
-- **따로 있는 평가자.** 쓰기 권한이 없는 에이전트가 PR 전에 끝 기준과 범위를 확인해요
-- **머지는 사람이.** 되돌리기 어려운 선택은 선택지로 물어 와요. 짧은 TL;DR을 읽고 머지해요
+kagami는 이렇게 나눠요.
+
+- **일을 트리로 나눠요.** 나누는 안은 AI가 내고 사람이 골라요. 할 차례가 된 것만 나눠요
+- **조각끼리의 약속을 먼저 테스트로 세워요.** 나눌 때 실행되는 테스트를 먼저 써 두니까, 각자 만들어도 부딪히면 CI가 알려 줘요
+- **누가 무엇을 하는지, 왜 그렇게 정했는지가 이슈에 남아요.** 트리의 그 자리 이슈에 남아서 다음 세션이나 팀원이 이어받아요
+
+"그냥 해줘"보다는 느려요. 대신 나중에 한세월 걸리지 않아요. AI를 더 오래 혼자 돌리는 도구는 아니에요.
+
+**근거:** 같은 프로젝트를 "다 맡기기"와 "kagami 방식"으로 두 번 만들고 있어요. 결과는 나오면 여기에 채울게요(지금은 확인 중).
+
+### 비슷한 도구와 다른 점
+
+비슷한 도구들도 일을 나눠요. 목적이 달라요. 아래 도구들은 AI 에이전트 여럿을 함께 돌리거나 명세를 작업으로 바꾸려고 나누고, kagami는 사람이 흐름을 쥐고 여러 사람이 같이 일하려고 나눠요.
+
+| | 일이 있는 곳 | 언제 나누나 | 조각을 맡는 쪽 | 조각 사이의 약속 |
+|---|---|---|---|---|
+| [CCPM](https://github.com/automazeio/ccpm) | GitHub 이슈와 `.claude/epics/` 파일 | 기획서 → 에픽 → 작업. 에픽마다 한 번에 | 병렬로 도는 에이전트 | 작업 파일의 `depends_on`·`conflicts_with` 표시, 에이전트마다 맡은 파일 |
+| [Spec Kit](https://github.com/github/spec-kit) | 저장소의 `specs/<기능>/tasks.md` | 명세 → 계획 → 작업. 기능마다 한 번에 | 에이전트. `[P]` 작업은 병렬로 | 계획 단계의 `contracts/` 인터페이스 문서와 계약 테스트 작업 |
+| [BMad Method](https://github.com/bmad-code-org/BMAD-METHOD) | 저장소의 기획 문서와 에픽의 `tickets.toml` | 에픽을 스토리로 먼저 나누고, 문제가 보이면 남은 스토리를 다시 나눔 | 에이전트가 스토리를 하나씩. 경계가 분명한 에픽은 병렬로 | 아키텍처 문서와 공유 계약, 에픽 경계의 통합 점검 |
+| [OpenSpec](https://github.com/Fission-AI/OpenSpec) | 저장소의 `openspec/changes/<변경>/tasks.md` | 변경마다 제안 → 명세 → 설계 → 작업 | 에이전트(`/opsx:apply`) | 확인 못 함 |
+| [Claude Code 에이전트 팀](https://code.claude.com/docs/en/agent-teams)(실험 기능) | 로컬 작업 목록 `~/.claude/tasks/` | 리드 에이전트가 그때그때 | 작업을 스스로 잡는 팀원 에이전트 | 작업 사이 의존성, 팀원마다 다른 파일 맡기 |
+| [Marcus](https://github.com/painted-porch/marcus) | 공유 칸반 보드 | 만들 것을 설명하면 Marcus가 나눔 | 보드에서 작업을 잡는 여러 에이전트 | 나누기 전에 만드는 영역 사이 인터페이스 계약(타입·API 모양) |
+| **kagami** | GitHub 이슈 트리 | 할 차례가 된 노드만. AI가 안 2~3개를 내고 사람이 고름 | 사람과 그 사람의 Claude Code 세션. 한 세션에 잎 하나 | 나눌 때 `contracts/<노드 번호>/`에 쓰는 실행되는 테스트. 한 번 초록이 된 계약이 빨개지면 CI 가드가 막음 |
+
+계약을 먼저 세우고 나누는 방법은 이미 알려져 있어요. kagami는 [Marcus의 contract-first decomposition](https://github.com/painted-porch/marcus/blob/main/docs/source/concepts/contract-first-decomposition.md)과 [James Phoenix의 글](https://understandingdata.com/posts/contracts-parallelize-agents/)에서 이 방법을 빌려 왔어요. 다른 빌려 온 방법(ADR/MADR, 트렁크 기반 개발, parallel change 등)은 [방법론 지도](docs/design.md#methodology-map)에 있어요.
+
+<sub>2026-11-08에 각 도구의 공식 README와 문서로 확인했어요: [CCPM README](https://github.com/automazeio/ccpm#readme), [Spec Kit README](https://github.com/github/spec-kit#readme)와 [템플릿](https://github.com/github/spec-kit/tree/main/templates), [BMad Method README](https://github.com/bmad-code-org/BMAD-METHOD#readme)와 [Choose a Planning Path](https://docs.bmad-method.org/plan/choose-a-planning-path/), [OpenSpec README](https://github.com/Fission-AI/OpenSpec#readme), [Claude Code 에이전트 팀 문서](https://code.claude.com/docs/en/agent-teams), [Marcus README](https://github.com/painted-porch/marcus#readme). 틀린 곳이 있으면 Issues로 알려 주세요.</sub>
 
 > [!NOTE]
 > kagami는 지금 **베타**(`v1.0.0-beta.1`)예요. 깨지는 곳이 있을 거예요. 겪은 일을 [Issues](https://github.com/Pancheble/kagami/issues)에 남겨 주세요.
