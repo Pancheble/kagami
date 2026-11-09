@@ -89,6 +89,6 @@ id=$(gh api repos/R/issues/<leaf> --jq .id)
 gh api repos/R/issues/B/sub_issues -X POST -F sub_issue_id=$id
 ```
 
-Then sync the board: `node "${CLAUDE_PLUGIN_ROOT}/src/board.ts" --repo R`. It puts the tree's issues on the GitHub Project boards linked to R and sets their Status (Todo / In Progress / Done). If it prints nothing (no board linked, nothing changed), say nothing. If it prints a line (what changed, or the `gh auth refresh -s project` hint), pass it on in one line. If it fails, show the error as a one-line warning and carry on. The board never stops the work.
+Then sync the board: `node "${CLAUDE_PLUGIN_ROOT}/src/board.ts" --repo R`. It puts the tree's issues on the GitHub Project boards linked to R and sets their Status (Todo / In Progress / Done). If it prints nothing (no board linked, nothing changed), say nothing. If it prints a line (what changed, or the `gh auth refresh -s project` hint), pass it on in one line, but show the `gh auth refresh -s project` hint at most once per session. If it fails, show the error as a one-line warning and carry on. The board never stops the work.
 
 Make the leaves and stop there. In the next session, `/kagami:next` recommends implementing them.

@@ -113,5 +113,6 @@ test("next, split and try call the board sync and never stop on it", () => {
 		);
 		assert.ok(md.includes('src/board.ts" --repo R'), s);
 		assert.ok(md.includes("The board never stops the work"), s);
+		assert.ok(md.includes("at most once per session"), s);
 	}
 });
