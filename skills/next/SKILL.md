@@ -36,6 +36,7 @@ Do this before recommending.
   - If there is an answer, confirm it in one line. Example: "#12 was answered with ② (reason: …). Is that right?" If it is, append ` → **answer** <what was picked> (the human). Reason: …` to the end of that `**needs-decision**` comment (`gh api -X PATCH repos/R/issues/comments/<id> -f body=…`; if it cannot be edited, a new comment starting with `**answer**`) and run `gh issue edit <number> -R R --remove-label needs-decision`
   - If there is no answer, show the question and its options again and ask. If they answer, record it as above. If they do not answer now, leave it
 - **stale**: for each issue, unassign the assignee (`gh issue edit <number> -R R --remove-assignee <login>`) and add `**released** @<login>. Reason: no activity for 3 days`. An unassigned issue may become ready again, so call the script once more and go to 2
+- **board**: last, sync the board with `node "${CLAUDE_PLUGIN_ROOT}/src/board.ts" --repo R`. It puts the tree's issues on the GitHub Project boards linked to R and sets their Status (Todo / In Progress / Done). If it prints nothing (no board linked, nothing changed), say nothing. If it prints a line (what changed, or the `gh auth refresh -s project` hint), pass it on in one line. If it fails, show the error as a one-line warning and carry on. The board never stops the work
 
 ## 2. Recommend
 
@@ -60,7 +61,7 @@ Wait until the human picks. If they pick something outside the recommendations, 
 ## 4. Assign
 
 - Just before assigning, re-read it with `gh issue view <number> -R R --json state,assignees`. If it is closed or someone took it, say so and go back to 2
-- `gh issue edit <number> -R R --add-assignee @me`
+- `gh issue edit <number> -R R --add-assignee @me`, then sync the board again (as in 1) so the picked work shows In Progress
 - If the picked work has `leftover` git branches, for each one show `git fetch origin && git diff --stat origin/dev...origin/<leaf-branch>` and the issue's records (`**blocked**`, `**released**`), and ask whether to continue it or start over. If you continue, start from that git branch, and if the original author is someone else, leave `Co-authored-by:` in the commit
 
 ## 5. Hand off
