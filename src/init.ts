@@ -11,7 +11,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { type Run, sh } from "./run.ts";
+import { num, type Run, sh } from "./run.ts";
 import { ensureLabels } from "./tree.ts";
 import { stamp, version } from "./version.ts";
 
@@ -115,13 +115,7 @@ export async function install(
 			"Installs only into a new empty repository. It already has a commit",
 		);
 
-	const target = (
-		await run(
-			"gh",
-			["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
-			dir,
-		)
-	).trim();
+	const target = await name(dir, run);
 	// labels first: if it fails for lack of permission, the folder stays empty and it can run again (--force, so creating them twice is fine)
 	await ensureLabels(target, run);
 	const p = plan(root, { repo: KAGAMI, ref });
@@ -139,25 +133,108 @@ export async function install(
 // project → links that board of the repo owner, without creating or editing it. Returns the board number; null if it fails (no project scope and so on)
 // Contract: contracts/155/init.contract.ts
 export async function board(
-	_repo: string,
-	_project: number | undefined,
-	_run: Run,
+	repo: string,
+	project: number | undefined,
+	run: Run,
 ): Promise<number | null> {
-	throw new Error("not implemented");
+	const [owner, repoName] = repo.split("/");
+	try {
+		let n = project;
+		if (n === undefined) {
+			const made = await run("gh", [
+				"project",
+				"create",
+				"--owner",
+				owner,
+				"--title",
+				repoName,
+				"--format",
+				"json",
+			]);
+			n = Number(JSON.parse(made).number);
+			await run("gh", [
+				"project",
+				"edit",
+				String(n),
+				"--owner",
+				owner,
+				"--visibility",
+				"PUBLIC",
+			]);
+		}
+		await run("gh", [
+			"project",
+			"link",
+			String(n),
+			"--owner",
+			owner,
+			"--repo",
+			repoName,
+		]);
+		return n;
+	} catch (e) {
+		console.error(`Board step failed: ${(e as Error).message.trim()}`);
+		return null;
+	}
 }
 
-// node src/init.ts [--ref <ref>] [--dir <target repo>]  (dir defaults to the current folder)
+// The target repo's owner/name, from the gh remote of dir
+async function name(dir: string, run: Run): Promise<string> {
+	return (
+		await run(
+			"gh",
+			["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+			dir,
+		)
+	).trim();
+}
+
+// What the CLI does: install (skipped with only, for a repo already using kagami), then the board step.
+// A board failure does not undo the install; board is null then
+export async function init(
+	dir: string,
+	{
+		root,
+		ref,
+		project,
+		only = false,
+	}: { root: string; ref?: string; project?: number; only?: boolean },
+	run: Run,
+): Promise<{ target: string; board: number | null }> {
+	const target = only
+		? await name(dir, run)
+		: await install(dir, { root, ref }, run);
+	return { target, board: await board(target, project, run) };
+}
+
+// node src/init.ts [--ref <ref>] [--dir <target repo>] [--project <number>] [--board]  (dir defaults to the current folder)
+// --project: link that existing board of the repo owner instead of making one. --board: only the board step, for a repo already using kagami
 if (import.meta.main) {
 	const { values } = parseArgs({
-		options: { ref: { type: "string" }, dir: { type: "string" } },
+		options: {
+			ref: { type: "string" },
+			dir: { type: "string" },
+			project: { type: "string" },
+			board: { type: "boolean" },
+		},
 	});
 	const root = fileURLToPath(new URL("../", import.meta.url));
-	const target = await install(
+	const project =
+		values.project === undefined
+			? undefined
+			: num("--project", values.project, 1);
+	const { target, board: n } = await init(
 		values.dir ?? process.cwd(),
-		{ root, ref: values.ref },
+		{ root, ref: values.ref, project, only: values.board },
 		sh,
 	);
+	if (!values.board)
+		console.log(
+			`Installed into ${target}. Made the first commit on dev; not pushed yet`,
+		);
 	console.log(
-		`Installed into ${target}. Made the first commit on dev; not pushed yet`,
+		n
+			? `Linked board ${n} of ${target.split("/")[0]} to ${target}`
+			: `No board linked. If gh lacks the project scope, run \`gh auth refresh -s project\`, then run again with --board${project ? ` --project ${project}` : ""}`,
 	);
 }
