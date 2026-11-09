@@ -22,8 +22,8 @@ export type Issue = {
 	children: Issue[];
 };
 
-// build: build a ready leaf / split: split a node with no children (including a root with every field and no children) / plan: planning conversation for a root with missing fields / try: try a branch whose leaves are all closed
-export type Kind = "build" | "split" | "plan" | "try";
+// build: build a ready leaf / split: split a node with no children (including a root with every field and no children) / plan: planning conversation for a root with missing fields / try: try a branch whose leaves are all closed / close: close a root whose branches are all closed
+export type Kind = "build" | "split" | "plan" | "try" | "close";
 export type Ready = { number: number; kind: Kind };
 
 // root is the root issue. A branch is a node directly under the root. Output in tree order (pre-order).
@@ -43,9 +43,11 @@ export function ready(root: Issue): Ready[] {
 					? "plan"
 					: !i.children.length
 						? "split"
-						: depth === 1 && allClosed(leaves(i))
-							? "try"
-							: undefined;
+						: depth === 0 && allClosed(i.children)
+							? "close"
+							: depth === 1 && allClosed(leaves(i))
+								? "try"
+								: undefined;
 		if (free && kind) out.push({ number: i.number, kind });
 		for (const c of i.children) walk(c, depth + 1);
 	};

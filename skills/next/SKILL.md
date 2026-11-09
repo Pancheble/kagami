@@ -21,7 +21,7 @@ node "${CLAUDE_PLUGIN_ROOT}/src/next.ts" --repo R --root <root>
 
 The output is JSON.
 
-- `ready`: ready work `{number, kind}`. kind is `build` (build a leaf), `split` (split a node with no children; for a root, split it into branches), `plan` (planning conversation for a root with empty fields), `try` (try a branch with every leaf closed)
+- `ready`: ready work `{number, kind}`. kind is `build` (build a leaf), `split` (split a node with no children; for a root, split it into branches), `plan` (planning conversation for a root with empty fields), `try` (try a branch with every leaf closed), `close` (close a root with every branch closed)
 - `stale`: issues assigned with no activity for 3 days
 - `waiting`: open issues labeled `needs-decision`
 - `drift`: if present, the kagami version on the first line of `R`'s AGENTS.md (`repo`) differs from the plugin version (`plugin`). If `repo` is missing, there is no version line. If `dev: false`, `R` has no `dev` git branch
@@ -49,7 +49,7 @@ Offer 2–3 ready pieces of work of different kinds, with reasons. Put your own 
 - If there is no ready work, say so, and say in one line each what the open work is waiting on (assignment, blocked-by, `blocked`)
 
 ```markdown
-1. #<number> <title> (<build a leaf | split | split the root into branches | planning conversation | trying a branch>) — recommended. <reason>
+1. #<number> <title> (<build a leaf | split | split the root into branches | planning conversation | trying a branch | closing the root>) — recommended. <reason>
 2. #<number> <title> (<…>) — <reason>
 3. …
 ```
@@ -72,3 +72,4 @@ Call the skill for the picked work's kind.
 - `split` → `/kagami:split <number>`
 - `try` → `/kagami:try <number>`
 - `plan` → only the human calls `/kagami:plan`. Tell the human to type `/kagami:plan`
+- `close` → there is no other skill. Confirm in one line. Example: "Every branch under #1 is closed. Close the root?" If the human agrees, add a short comment listing the closed branches (`gh issue comment <root> -R R --body …`), close it with `gh issue close <root> -R R` (leave the assignee, as with any closed issue), and sync the board again (as in 1). If not, unassign it and finish
