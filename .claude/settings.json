@@ -14,14 +14,6 @@
 			"Bash(git push origin HEAD:dev)"
 		]
 	},
-	"extraKnownMarketplaces": {
-		"kagami": {
-			"source": {
-				"source": "directory",
-				"path": "./"
-			}
-		}
-	},
 	"enabledPlugins": {
 		"kagami@kagami": true
 	}

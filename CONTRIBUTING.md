@@ -64,6 +64,14 @@ A record is an issue comment, and it gets a label of the same name as the bold m
 
 `released` (why the work was unassigned) leaves only a record, with no label.
 
+## Developing kagami itself
+
+This repository is the `kagami` marketplace and is also built with the kagami workflow. Target repositories declare the GitHub marketplace under the name `kagami`. If this repository declared a folder marketplace under the same name, opening a session on one side would replace the user-scope `kagami` marketplace with the other side's source. So `.claude/settings.json` here declares no marketplace. It only enables `kagami@kagami`, and sessions here use the kagami you have installed.
+
+- Install the released plugin once at user scope: `claude plugin marketplace add Pancheble/kagami`, then `claude plugin install kagami@kagami`
+- To try skills, agents or hooks from your working tree, start the CLI with `claude --plugin-dir .`. It loads this folder's plugin for that session only
+- Do not add a marketplace named `kagami` to `.claude/settings.json`. `contracts/126/marketplace.contract.ts` checks this
+
 ## More reading
 
 - `AGENTS.md`: the full set of rules CC follows
