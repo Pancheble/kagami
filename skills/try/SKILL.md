@@ -59,7 +59,7 @@ If the answer mixes two, split it per item and confirm each.
    - If `git ls-remote --tags origin <tag>` already has it, stop. Propose making a new leaf that bumps the version
    - `git tag <tag> C && git push origin <tag>`. For the tag push, the permission prompt is the human's consent. If it is refused, delete the local tag and stop
    - Write notes to a file and run `gh release create <tag> -R R --verify-tag --title <tag> --notes-file <file>`. If `prerelease` is true (a tailed version such as `1.0.0-beta.1`), add `--prerelease` so the Release is marked Pre-release
-6. Add the trying-a-branch record to B and close it with `gh issue close B -R R`
+6. Add the trying-a-branch record to B and close it with `gh issue close B -R R`, then sync the board as in "New leaf" below
 
 ```markdown
 **trying a branch** it's fine (the human). <closing without a tag or Release since this is before v1.0.0 | tag <tag>, Release <link>>
@@ -88,5 +88,7 @@ gh issue create -R R --title "<leaf title>" --label leaf --body-file <body>
 id=$(gh api repos/R/issues/<leaf> --jq .id)
 gh api repos/R/issues/B/sub_issues -X POST -F sub_issue_id=$id
 ```
+
+Then sync the board: `node "${CLAUDE_PLUGIN_ROOT}/src/board.ts" --repo R`. It puts the tree's issues on the GitHub Project boards linked to R and sets their Status (Todo / In Progress / Done). If it prints nothing (no board linked, nothing changed), say nothing. If it prints a line (what changed, or the `gh auth refresh -s project` hint), pass it on in one line, but show the `gh auth refresh -s project` hint at most once per session. If it fails, show the error as a one-line warning and carry on. The board never stops the work.
 
 Make the leaves and stop there. In the next session, `/kagami:next` recommends implementing them.
