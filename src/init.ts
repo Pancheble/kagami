@@ -135,6 +135,17 @@ export async function install(
 	return target;
 }
 
+// #155 leaf #157: links repo (owner/name) to a GitHub Project board. No project → creates a public board titled with the repo name under the repo owner.
+// project → links that board of the repo owner, without creating or editing it. Returns the board number; null if it fails (no project scope and so on)
+// Contract: contracts/155/init.contract.ts
+export async function board(
+	_repo: string,
+	_project: number | undefined,
+	_run: Run,
+): Promise<number | null> {
+	throw new Error("not implemented");
+}
+
 // node src/init.ts [--ref <ref>] [--dir <target repo>]  (dir defaults to the current folder)
 if (import.meta.main) {
 	const { values } = parseArgs({
