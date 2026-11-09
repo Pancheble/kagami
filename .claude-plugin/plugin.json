@@ -1,6 +1,6 @@
 {
 	"name": "kagami",
-	"version": "1.0.0-beta.1",
+	"version": "1.0.0-beta.2",
 	"description": "A Claude Code workflow where you choose and AI builds. Work is split into GitHub issues, each built test-first, and you try the result before it ships.",
 	"author": { "name": "baekchan" },
 	"repository": "https://github.com/Pancheble/kagami",

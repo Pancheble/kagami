@@ -53,7 +53,7 @@ kagami는 이렇게 나눠요.
 <sub>2026-11-08에 각 도구의 공식 README와 문서로 확인했어요: [CCPM README](https://github.com/automazeio/ccpm#readme), [Spec Kit README](https://github.com/github/spec-kit#readme)와 [템플릿](https://github.com/github/spec-kit/tree/main/templates), [BMad Method README](https://github.com/bmad-code-org/BMAD-METHOD#readme)와 [Choose a Planning Path](https://docs.bmad-method.org/plan/choose-a-planning-path/), [OpenSpec README](https://github.com/Fission-AI/OpenSpec#readme), [Claude Code 에이전트 팀 문서](https://code.claude.com/docs/en/agent-teams), [Marcus README](https://github.com/painted-porch/marcus#readme). 틀린 곳이 있으면 Issues로 알려 주세요.</sub>
 
 > [!NOTE]
-> kagami는 지금 **베타**(`v1.0.0-beta.1`)예요. 깨지는 곳이 있을 거예요. 겪은 일을 [Issues](https://github.com/Pancheble/kagami/issues)에 남겨 주세요.
+> kagami는 지금 **베타**(`v1.0.0-beta.2`)예요. 깨지는 곳이 있을 거예요. 겪은 일을 [Issues](https://github.com/Pancheble/kagami/issues)에 남겨 주세요.
 
 ## 빠른 시작
 
