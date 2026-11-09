@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { init, install, plan } from "./init.ts";
+import { board, init, install, plan } from "./init.ts";
 import type { Run } from "./run.ts";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -23,11 +23,25 @@ function repo(extra?: string) {
 	if (extra) writeFileSync(join(dir, extra), "x");
 	return dir;
 }
-// HEAD exists when commits is true. board: gh project calls work (else they fail like a token without the project scope)
-function fake(commits = false, board = false) {
+// HEAD exists when commits is true. board: gh project calls work (else they fail like a token without the project scope).
+// linked: board numbers already linked to the repo
+function fake(commits = false, board = false, linked: number[] = []) {
 	const calls: string[][] = [];
 	const run: Run = async (cmd, args) => {
 		calls.push([cmd, ...args]);
+		if (args[0] === "api") {
+			if (!board)
+				throw new Error("gh api failed\nrequired scopes [read:project]");
+			const nodes = linked.map((number) => ({
+				id: `P${number}`,
+				number,
+				closed: false,
+				owner: { login: "o" },
+			}));
+			return JSON.stringify({
+				data: { repository: { projectsV2: { nodes } } },
+			});
+		}
 		if (args[0] === "project") {
 			if (!board)
 				throw new Error("gh project failed\nmissing required scopes [project]");
@@ -95,7 +109,7 @@ test("a failing board step does not undo the install: the first commit is made, 
 		board: null,
 	});
 	assert.ok(calls.some((c) => c[0] === "git" && c[1] === "commit"));
-	assert.ok(calls.some((c) => c[1] === "project"));
+	assert.ok(calls.some((c) => c[1] === "api"));
 });
 
 test("install then board: makes and links a board", async () => {
@@ -121,4 +135,16 @@ test("--board: in a repo already using kagami, skips the empty-repo check and on
 	assert.ok(!calls.some((c) => c[0] === "git" || c[1] === "label"));
 	assert.ok(!calls.some((c) => c[2] === "create"));
 	assert.deepEqual(readdirSync(dir).sort(), [".git", "AGENTS.md"]);
+});
+
+test("--board without --project in a repo with a linked board: returns that board, makes none", async () => {
+	const { run, calls } = fake(true, true, [4]);
+	assert.equal(await board(TARGET, undefined, run), 4);
+	assert.ok(!calls.some((c) => c[1] === "project" && c[2] === "create"));
+});
+
+test("linked() failing (no project scope): null as before, does not throw", async () => {
+	const { run, calls } = fake(true, false);
+	assert.equal(await board(TARGET, undefined, run), null);
+	assert.ok(!calls.some((c) => c[1] === "project" && c[2] === "create"));
 });
