@@ -23,12 +23,12 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: repo
           fetch-depth: 0 # judge compares with origin/dev. HEAD is the merge commit of the PR on top of dev
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: dev
           path: kagami
