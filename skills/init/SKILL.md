@@ -11,7 +11,7 @@ Arguments (`$ARGUMENTS`, all optional): the kagami ref the target repository pin
 
 ## 0. Start
 
-- The current folder must be a clone of the target repository. Say its name with `gh repo view --json nameWithOwner --jq .nameWithOwner`. If that fails, stop, and tell the human to create an empty repository on GitHub, clone it, and call this again from there
+- The current folder must be a clone of the target repository. Say its name with `gh repo view --json nameWithOwner --jq .nameWithOwner`. If that fails, stop, and tell the human to clone the repository (or create an empty one on GitHub and clone it), and call this again from there
 - Check whether the repository is empty (no commits, no files other than `.git`). If it already has code, say in one line that you will install into an existing repository (existing files are not overwritten, `CLAUDE.md` and `.claude/settings.json` are merged, and it stops if there is an `AGENTS.md`), and add `--existing` to the command in 2
 - With `--board`, skip the empty check and steps 1–3: run `node "${CLAUDE_PLUGIN_ROOT}/src/init.ts" --board [--project <number>]` and go to 4
 
