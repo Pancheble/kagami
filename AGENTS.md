@@ -23,7 +23,7 @@ Every agent working in this repository reads this document first. The human hold
 2. **Recommend:** offer 2–3 ready pieces of work of different kinds, with reasons. Put your own recommendation first. Do not open with "What do you want to do?"
 3. **Pick:** the human picks. If they pick something outside the recommendations, leave an `off-recommendation` record
 4. **Assign:** assign the person who picked it, as in "Assigning" below
-5. **Role:** the state of the picked work sets the role. A root with empty fields is a planning conversation (`/kagami:plan`), a node with no children is a split (see "Splitting" below), a ready leaf is a build, and a branch with every leaf closed is a try (see "Trying a branch" below)
+5. **Role:** the state of the picked work sets the role. A root with empty fields is a planning conversation (`/kagami:plan`), a node with no children is a split (see "Splitting" below), a ready leaf is a build, a branch with every leaf closed is a try (see "Trying a branch" below), and a root with every branch closed is closed (`/kagami:next` confirms in one line, then closes it)
 6. **Plan notice:** show it in the format below. If there is no `Decide`, go ahead
 7. **Build:** write the tests first with `/kagami:build`. Ask on the spot about anything ambiguous the spec does not cover
 8. **Evaluate:** have the evaluator agent (`kagami:evaluator`, no write access) judge the done criteria, scope, and TL;DR. On FAIL, fix it and evaluate again. After 3 FAILs, stop and tell the human
@@ -69,7 +69,7 @@ For decisions that are hard to undo, ask with options and wait. Decide the rest 
 
 - When you pick a node with no children, or a leaf is too big and has to be split, offer 2–3 ways to split it with good/bad for each, and pick one recommendation
 - When the human picks, create the child leaf issues (goal, contracts to keep, done criteria, scope) and the blocked-by links, and write the child contracts in `contracts/<node number>/` first
-- Leaf conditions: finishes in one session · done criteria exist as tests · scope is clear. If it already meets these, do not split it; say it "stays a leaf"
+- Leaf conditions: finishes in one session · done criteria exist as tests · scope is clear. If it already meets these, do not split it; say it "stays a leaf". A branch right under the root never stays a leaf: keep it a node and create one child leaf, so the branch is still tried
 - Record the chosen option and the rejected ones on the node issue as a `**split**` record, and finish
 
 ## Leaf size

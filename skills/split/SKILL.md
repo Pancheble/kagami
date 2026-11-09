@@ -15,7 +15,7 @@ Arguments: `$1` the node or root number, `$2` the target repository (if none, th
 
 - Read only the node issue and its parent issue with `gh issue view` (body and comments). Do not dig through other PRs
 - If it already has children (`gh api repos/R/issues/<node>/sub_issues`), stop and say so. This skill splits only nodes and roots with no children
-- If the node already meets the leaf conditions (AGENTS.md "Splitting"), say it "stays a leaf", and if the human agrees, change the `node` label to `leaf` and finish
+- If the node already meets the leaf conditions (AGENTS.md "Splitting"), say it "stays a leaf", and if the human agrees, change the `node` label to `leaf` and finish. A branch right under the root never stays a leaf: keep it a node, offer one option with a single child leaf, and go on to 2, so the branch is still tried
 - Read the code the node's goal touches. If you see a place to tidy first so the change is easy (prefactor), make that the first leaf
 
 ## 2. Offer options
