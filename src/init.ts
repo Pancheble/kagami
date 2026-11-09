@@ -11,6 +11,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { linked } from "./board.ts";
 import { num, type Run, sh } from "./run.ts";
 import { ensureLabels } from "./tree.ts";
 import { stamp, version } from "./version.ts";
@@ -129,8 +130,8 @@ export async function install(
 	return target;
 }
 
-// #155 leaf #157: links repo (owner/name) to a GitHub Project board. No project → creates a public board titled with the repo name under the repo owner.
-// project → links that board of the repo owner, without creating or editing it. Returns the board number; null if it fails (no project scope and so on)
+// #155 leaf #157: links repo (owner/name) to a GitHub Project board. No project → the board already linked to the repo if there is one (#160),
+// else creates a public board titled with the repo name under the repo owner. project → links that board of the repo owner, without creating or editing it. Returns the board number; null if it fails (no project scope and so on)
 // Contract: contracts/155/init.contract.ts
 export async function board(
 	repo: string,
@@ -141,6 +142,8 @@ export async function board(
 	try {
 		let n = project;
 		if (n === undefined) {
+			const [first] = await linked(repo, run);
+			if (first) return first.number;
 			const made = await run("gh", [
 				"project",
 				"create",
