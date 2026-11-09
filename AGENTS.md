@@ -108,8 +108,9 @@ Fill `Changed` by counting with `git diff` and `gh`; write only `Decided` yourse
 - dev is the trunk. All work happens on a leaf branch `leaf/<number>-<short-name>` and is merged into dev through a PR
 - Leaf PRs are squash-merged. One leaf is one dev commit
 - Do not push directly to dev. Merge only with CI green + a TL;DR + the human's consent
-- dev is the only git branch. "When the human tried it" is marked with a release tag `v*` (the commit where trying a branch was "it's fine", one per release). Release tags are the only kind of tag
-- Tag pushes are never auto-allowed. The permission prompt is the human's consent
+- "When the human tried it" is marked with a release tag `v*` (the commit where trying a branch was "it's fine", one per release). Release tags are the only kind of tag
+- main is not for work: it is a pointer to the latest plain release. When a try puts a tag with no tail (`v1.0.0`, not `v1.0.0-beta.1`), main is moved to that tag commit. Nobody commits to main or opens a PR to it. dev stays the default branch
+- Tag pushes and main pushes are never auto-allowed. The permission prompt is the human's consent
 
 ## Commits and PRs
 

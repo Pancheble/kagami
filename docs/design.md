@@ -48,7 +48,7 @@ When every leaf of a branch is closed, the human tries it out. The branch issue 
 
 The first release is `v1.0.0`. Before `v1.0.0`, close without a tag: even when the answer is "it's fine", close only the branch, with no tag and no GitHub Release.
 
-`dev` is the only development git branch, and tags mark the points where the human tried the work. The only kind of tag is the release tag `v*`; old states are pointed to by commit hash. Tag pushes are never auto-allowed, so the Claude Code permission prompt is the human's consent. Once the repository is public, `main` exists only as a pointer to the latest `v*` release (see [ADR 0004](adr/0004-single-dev-trunk.md)).
+`dev` is the only development git branch, and tags mark the points where the human tried the work. The only kind of tag is the release tag `v*`; old states are pointed to by commit hash. Tag pushes are never auto-allowed, so the Claude Code permission prompt is the human's consent. `main` exists only as a pointer to the latest plain release: when a try puts a tag with no tail (`v1.0.0`), `/kagami:try` moves `main` to that tag commit; a beta (`v1.0.0-beta.1`) does not move it. A ruleset on `main` forbids force pushes and deletion. The default branch stays `dev`, because GitHub closes issues from `Closes #<leaf>` only for PRs merged into the default branch (see [ADR 0004](adr/0004-single-dev-trunk.md), #134).
 
 ## The state of the work sets the role
 
