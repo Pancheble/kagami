@@ -90,10 +90,11 @@ export function plan(
 }
 
 // Installs into the empty new repo in dir (nothing but .git, no commits). Otherwise does nothing and refuses
+// existing: a repo that already has code (#165 leaf, contract contracts/165/existing.contract.ts). Not implemented yet: refused like a non-empty repo
 // Labels, writing files, pointing HEAD at dev, up to the first commit. The human does the push (skills/init/SKILL.md). Returns the target repo name
 export async function install(
 	dir: string,
-	{ root, ref }: { root: string; ref?: string },
+	{ root, ref }: { root: string; ref?: string; existing?: boolean },
 	run: Run,
 ): Promise<string> {
 	if (!existsSync(join(dir, ".git")))
@@ -201,7 +202,13 @@ export async function init(
 		ref,
 		project,
 		only = false,
-	}: { root: string; ref?: string; project?: number; only?: boolean },
+	}: {
+		root: string;
+		ref?: string;
+		project?: number;
+		only?: boolean;
+		existing?: boolean;
+	},
 	run: Run,
 ): Promise<{ target: string; board: number | null }> {
 	const target = only
