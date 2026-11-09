@@ -88,7 +88,7 @@ The rules agents follow are in [AGENTS.md](AGENTS.md). Why they look that way: [
 
 | Command | What it does |
 |---|---|
-| `/kagami:init` | Install kagami into a new empty repository: rules, issue templates, labels, and a CI guard |
+| `/kagami:init` | Install kagami into a repository, new or existing: rules, issue templates, labels, and a CI guard |
 | `/kagami:plan` | Turn what you want to build into a goal issue through conversation |
 | `/kagami:next` | Recommend 2–3 things to work on next and start the one you pick |
 | `/kagami:split` | Break a large issue into pieces that each fit in one session |
@@ -99,7 +99,7 @@ The rules agents follow are in [AGENTS.md](AGENTS.md). Why they look that way: [
 ## FAQ
 
 **Can I add it to an existing project?**
-Not yet. `/kagami:init` only sets up a new empty repository.
+Yes. Run `/kagami:init` in a clone of it. It does not overwrite your files (it appends to `CLAUDE.md`, merges `.claude/settings.json`, and stops if there is an `AGENTS.md`), makes `dev` from your default branch, and asks you to make `dev` the default branch after pushing. Your existing issues stay outside the tree.
 
 **Does it work for a team?**
 Yes. Each person picks work from the same issue tree, and picked work is assigned so nobody else's session recommends it.
