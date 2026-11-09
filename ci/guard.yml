@@ -1,5 +1,5 @@
 # kagami guard: runs kagami src/guard.ts judge on every PR of the target repo (the team repo) and shows red, green or a flag.
-# Not the same as the kagami repo's own CI (.github/workflows/ci.yml). It uses a read token only and writes nothing to GitHub.
+# Not the same as the kagami repo's own CI (.github/workflows/ci.yml). It has read-only permissions (contents: read) and writes nothing to GitHub.
 # Merge into dev only with CI green + a TL;DR + the human's consent (AGENTS.md). If a PR edits this file, the result changes too
 # (pull_request runs the PR side's workflow). So the human reads this file's diff before merging.
 # Contract cleanup: reads the contract-change label and the Changed line of the body TL;DR from the event payload. Changing the label or body reruns it
