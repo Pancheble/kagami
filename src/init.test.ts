@@ -51,7 +51,8 @@ function fake(commits = false, board = false, linked: number[] = []) {
 			if (commits) return "abc\n";
 			throw new Error("git rev-parse failed");
 		}
-		if (args[0] === "repo") return `${TARGET}\n`;
+		if (args[0] === "repo")
+			return args.includes("defaultBranchRef") ? "main\n" : `${TARGET}\n`;
 		return "";
 	};
 	return { run, calls };
@@ -147,4 +148,55 @@ test("linked() failing (no project scope): null as before, does not throw", asyn
 	const { run, calls } = fake(true, false);
 	assert.equal(await board(TARGET, undefined, run), null);
 	assert.ok(!calls.some((c) => c[1] === "project" && c[2] === "create"));
+});
+
+test("without existing, a repo with commits is refused with a hint at --existing", async () => {
+	await assert.rejects(
+		install(repo(), { root: ROOT }, fake(true).run),
+		/--existing/,
+	);
+	await assert.rejects(
+		install(repo("README.md"), { root: ROOT }, fake().run),
+		/--existing/,
+	);
+});
+
+test("init passes existing on to install: no empty-repo refusal, dev from the default branch, only kagami files added", async () => {
+	const dir = repo("README.md");
+	const { run, calls } = fake(true);
+	assert.deepEqual(
+		await init(dir, { root: ROOT, ref: "dev", existing: true }, run),
+		{
+			target: TARGET,
+			board: null,
+		},
+	);
+	const git = calls
+		.filter((c) => c[0] === "git")
+		.map((c) => c.slice(1).join(" "));
+	assert.ok(git.includes("switch -q -c dev main"), git.join("\n"));
+	assert.ok(!git.includes("add -A"));
+	assert.ok(
+		git.some((c) => c.startsWith("add -- ") && c.includes("AGENTS.md")),
+	);
+});
+
+test("CLI --existing reaches init", async () => {
+	const { execFile } = await import("node:child_process");
+	const dir = repo("README.md");
+	const out = await new Promise<string>((ok) =>
+		execFile(
+			process.execPath,
+			[
+				fileURLToPath(new URL("./init.ts", import.meta.url)),
+				"--dir",
+				dir,
+				"--existing",
+			],
+			(_e, so, se) => ok(so + se),
+		),
+	);
+	// fake .git folder: past the empty-repo check, fails at the first real git call instead
+	assert.doesNotMatch(out, /new empty repository|Unknown option/);
+	assert.match(out, /git \S+ failed/);
 });
