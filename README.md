@@ -53,7 +53,7 @@ Setting contracts before splitting is a known method. kagami borrowed it from [M
 <sub>Checked against each tool's official README and docs on 2026-11-08: [CCPM README](https://github.com/automazeio/ccpm#readme), [Spec Kit README](https://github.com/github/spec-kit#readme) and [templates](https://github.com/github/spec-kit/tree/main/templates), [BMad Method README](https://github.com/bmad-code-org/BMAD-METHOD#readme) and [Choose a Planning Path](https://docs.bmad-method.org/plan/choose-a-planning-path/), [OpenSpec README](https://github.com/Fission-AI/OpenSpec#readme), [Claude Code agent teams docs](https://code.claude.com/docs/en/agent-teams), [Marcus README](https://github.com/painted-porch/marcus#readme). If something is wrong, tell us in Issues.</sub>
 
 > [!NOTE]
-> kagami is in **beta** (`v1.0.0-beta.2`). Things will break. Tell us what you hit in [Issues](https://github.com/Pancheble/kagami/issues).
+> kagami is in **beta** (`v1.0.0-beta.3`). Things will break. Tell us what you hit in [Issues](https://github.com/Pancheble/kagami/issues).
 
 ## Quick start
 

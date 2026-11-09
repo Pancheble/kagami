@@ -2,6 +2,14 @@
 
 Each entry lists the leaf PR titles that went into the release, as in its GitHub Release.
 
+## 1.0.0-beta.3 (2026-11-09)
+
+Install kagami into a repository that already has code (`/kagami:init --existing`), published as a Pre-release.
+
+- feat: 이미 코드가 있는 저장소에 install (--existing) (#170)
+- docs: init 스킬·README에 기존 저장소 안내 (#169)
+- test: #165 이미 코드가 있는 저장소에 깔기 계약 (#168)
+
 ## 1.0.0-beta.2 (2026-11-09)
 
 GitHub Project board, community files and social preview, published as a Pre-release.
