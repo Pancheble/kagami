@@ -92,7 +92,7 @@ export function plan(
 // Installs into the empty new repo in dir (nothing but .git, no commits). Otherwise does nothing and refuses.
 // existing: a repo that already has code (#165, contract contracts/165/existing.contract.ts). dev from the default branch tip, one commit
 // with the kagami files only. Same-name files: CLAUDE.md gets a kagami block appended, .claude/settings.json gets the kagami keys, the rest are skipped.
-// Refuses (writing nothing) if AGENTS.md is there, the tree is not clean, or dev already exists (also origin/dev)
+// Refuses (writing nothing) if AGENTS.md is there, the tree is not clean, dev already exists (also origin/dev), or a kagami path is gitignored
 // Labels, writing files, pointing HEAD at dev, up to the first commit. The human does the push (skills/init/SKILL.md). Returns the target repo name
 export async function install(
 	dir: string,
@@ -169,6 +169,14 @@ async function installExisting(dir: string, p: Plan, run: Run) {
 			.split("\n")
 			.filter(Boolean),
 	);
+	// an ignored kagami path may hold the human's own local file, and git add would refuse it anyway
+	const ignored = (
+		await git("check-ignore", "--", ...Object.keys(p.files)).catch(() => "")
+	).trim();
+	if (ignored)
+		throw new Error(
+			`Ignored by .gitignore, kagami must commit these: ${ignored.split("\n").join(", ")}`,
+		);
 	if (there.has("AGENTS.md"))
 		throw new Error(
 			"AGENTS.md is already there: kagami would replace its rules",

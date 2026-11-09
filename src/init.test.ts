@@ -200,3 +200,18 @@ test("CLI --existing reaches init", async () => {
 	assert.doesNotMatch(out, /new empty repository|Unknown option/);
 	assert.match(out, /git \S+ failed/);
 });
+
+test("existing: a gitignored kagami path is refused before anything is written", async () => {
+	const dir = repo("README.md");
+	const { run, calls } = fake(true);
+	const ignoring: Run = (cmd, args, cwd) =>
+		args[0] === "check-ignore"
+			? Promise.resolve(".claude/settings.json\n")
+			: run(cmd, args, cwd);
+	await assert.rejects(
+		install(dir, { root: ROOT, existing: true }, ignoring),
+		/\.claude\/settings\.json/,
+	);
+	assert.deepEqual(readdirSync(dir).sort(), [".git", "README.md"]);
+	assert.ok(!calls.some((c) => c[1] === "label" || c[1] === "switch"));
+});
