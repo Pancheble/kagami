@@ -53,12 +53,13 @@ If the answer mixes two, split it per item and confirm each.
 
 1. Decide the version: if the current repository has `.claude-plugin/plugin.json`, it is its `version`. Otherwise ask the human. When you ask, show `git tag -l 'v*' --sort=-v:refname | head -3`, and the default answer is "before 1.0.0 (no tag)"
 2. Collect the leaf PR titles: for each closed leaf under B in the tree, get the PR numbers with `gh issue view <leaf> -R R --json closedByPullRequestsReferences`, and keep only one of any duplicate PR. Call `gh pr view <PR> -R R --json title,mergedAt` for each PR, drop PRs that were not merged, and order them by mergedAt
-3. Call `node ${CLAUDE_PLUGIN_ROOT}/src/try.ts <version> <title>...`. The output is `{tag?, notes, prerelease}` JSON
+3. Call `node ${CLAUDE_PLUGIN_ROOT}/src/try.ts <version> <title>...`. The output is `{tag?, notes, prerelease, main}` JSON
 4. If there is no tag (before 1.0.0), go to 5 without a tag or Release
 5. If there is a tag:
    - If `git ls-remote --tags origin <tag>` already has it, stop. Propose making a new leaf that bumps the version
    - `git tag <tag> C && git push origin <tag>`. For the tag push, the permission prompt is the human's consent. If it is refused, delete the local tag and stop
    - Write notes to a file and run `gh release create <tag> -R R --verify-tag --title <tag> --notes-file <file>`. If `prerelease` is true (a tailed version such as `1.0.0-beta.1`), add `--prerelease` so the Release is marked Pre-release
+   - If `main` is true (a plain release such as `1.0.0`), move main to the tag commit: `git push origin C:refs/heads/main`. The first one creates main. For this push, the permission prompt is the human's consent. If it is refused or rejected (main is not behind C), say so in one line and carry on: the tag and Release stay. A beta (`main` false) does not move main
 6. Add the trying-a-branch record to B and close it with `gh issue close B -R R`, then sync the board as in "New leaf" below
 
 ```markdown
